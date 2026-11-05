@@ -63,4 +63,9 @@ export const api = {
   runProject: <TResult = unknown>(id: string) =>
     request<Run<TResult>>(`/api/projects/${id}/run`, { method: "POST" }),
   listRuns: <TResult = unknown>(id: string) => request<Run<TResult>[]>(`/api/projects/${id}/runs`),
+  askTutor: (id: string, question: string) =>
+    request<{ answer: string }>(`/api/projects/${id}/tutor`, {
+      method: "POST",
+      body: JSON.stringify({ question }),
+    }),
 };

@@ -5,27 +5,36 @@ import Link from "next/link";
 import { api, Project, Run } from "../lib/api";
 import { useCollaboration } from "../lib/useCollaboration";
 import PresenceBadge from "../lib/PresenceBadge";
-import { DailyWeather, GrowthResult, Thresholds } from "./types";
+import TutorPanel from "../lib/TutorPanel";
+import InteractiveCanvas, { Piece } from "../lib/InteractiveCanvas";
+import { GrowthResult, GrowthScene, Plot } from "./types";
+import { PIECE_TYPES, SPECIES_REFERENCE, defaultPlot, makeDays, nextPlotId } from "./canvasAdapter";
 import GrowthChart from "./GrowthChart";
 
 const STORAGE_KEY = "usl-agriculture-project-id";
 const DISCIPLINE = "agriculture";
 
-function makeDays(n: number, tmin: number, tmax: number): DailyWeather[] {
-  return Array.from({ length: n }, (_, i) => ({ day: i + 1, tmin, tmax }));
-}
+const SAMPLE_LAYOUT: Record<string, { x: number; y: number }> = { parcela1: { x: 120, y: 100 } };
 
 export default function AgriculturePage() {
   const [project, setProject] = useState<Project | null>(null);
-  const [tBase, setTBase] = useState(10);
-  const [thresholds, setThresholds] = useState<Thresholds>({ germination: 50, flowering: 600, maturity: 1200 });
-  const [days, setDays] = useState<DailyWeather[]>(makeDays(60, 15, 27));
-  const [genCount, setGenCount] = useState(60);
-  const [genTmin, setGenTmin] = useState(15);
-  const [genTmax, setGenTmax] = useState(27);
+  const [plots, setPlots] = useState<Plot[]>([{ ...defaultPlot("parcela1") }]);
+  const [layout, setLayout] = useState<Record<string, { x: number; y: number }>>(SAMPLE_LAYOUT);
+  const [selectedId, setSelectedId] = useState<string | null>("parcela1");
   const [lastRun, setLastRun] = useState<Run<GrowthResult> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  function loadScene(scene: GrowthScene) {
+    if (scene.plots?.length) setPlots(scene.plots);
+    if (scene.layout && Object.keys(scene.layout).length) {
+      setLayout(scene.layout);
+    } else if (scene.plots?.length) {
+      const grid: Record<string, { x: number; y: number }> = {};
+      scene.plots.forEach((p, i) => { grid[p.label] = { x: 100 + (i % 4) * 140, y: 100 + Math.floor(i / 4) * 110 }; });
+      setLayout(grid);
+    }
+  }
 
   useEffect(() => {
     const existing = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
@@ -34,10 +43,7 @@ export default function AgriculturePage() {
         .getProject(existing)
         .then((p) => {
           setProject(p);
-          const scene = p.scene as unknown as { t_base: number; days: DailyWeather[]; thresholds: Thresholds };
-          if (scene.t_base) setTBase(scene.t_base);
-          if (scene.days?.length) setDays(scene.days);
-          if (scene.thresholds) setThresholds(scene.thresholds);
+          loadScene(p.scene as unknown as GrowthScene);
           const typedRuns = p.runs as unknown as Run<GrowthResult>[];
           if (typedRuns.length) setLastRun(typedRuns[typedRuns.length - 1]);
         })
@@ -45,16 +51,9 @@ export default function AgriculturePage() {
     }
   }, []);
 
-  const { connected, connectedCount } = useCollaboration<
-    { t_base: number; days: DailyWeather[]; thresholds: Thresholds },
-    GrowthResult
-  >({
+  const { connected, connectedCount } = useCollaboration<GrowthScene, GrowthResult>({
     projectId: project?.id ?? null,
-    onSceneUpdated: (scene) => {
-      if (scene.t_base) setTBase(scene.t_base);
-      if (scene.days?.length) setDays(scene.days);
-      if (scene.thresholds) setThresholds(scene.thresholds);
-    },
+    onSceneUpdated: (scene) => loadScene(scene),
     onRunAdded: (run) => setLastRun(run),
   });
 
@@ -66,13 +65,30 @@ export default function AgriculturePage() {
     return p;
   }
 
+  function placePlot(_type: string, x: number, y: number) {
+    const id = nextPlotId();
+    setPlots((prev) => [...prev, { ...defaultPlot(id) }]);
+    setLayout((prev) => ({ ...prev, [id]: { x, y } }));
+    setSelectedId(id);
+  }
+  function movePlot(uid: string, x: number, y: number) {
+    setLayout((prev) => ({ ...prev, [uid]: { x, y } }));
+  }
+  function deletePlot(uid: string) {
+    setPlots((prev) => prev.filter((p) => p.label !== uid));
+    setSelectedId((s) => (s === uid ? null : s));
+  }
+  function updateSelected(patch: Partial<Plot>) {
+    setPlots((prev) => prev.map((p) => (p.label === selectedId ? { ...p, ...patch } : p)));
+  }
+
   async function saveAndRun() {
     setBusy(true);
     setError(null);
     try {
       const p = await ensureProject();
-      const scene = { t_base: tBase, days, thresholds };
-      await api.saveScene(p.id, scene);
+      const scene: GrowthScene = { plots, layout };
+      await api.saveScene(p.id, scene as unknown as Record<string, unknown>);
       const run = await api.runProject<GrowthResult>(p.id);
       setLastRun(run);
     } catch (e) {
@@ -83,47 +99,87 @@ export default function AgriculturePage() {
     }
   }
 
+  const selected = plots.find((p) => p.label === selectedId);
+  const selectedResult = lastRun?.result.plots.find((p) => p.label === selectedId);
+
+  const pieces: Piece[] = plots.map((p) => {
+    const r = lastRun?.result.plots.find((pr) => pr.label === p.label);
+    return {
+      uid: p.label, type: "plot", x: layout[p.label]?.x ?? 100, y: layout[p.label]?.y ?? 100,
+      state: p.label === selectedId ? "selected" : "default",
+      badge: r ? `${r.current_stage} · ${r.total_gdd.toFixed(0)} GDD` : undefined,
+    };
+  });
+
   return (
-    <main>
+    <main className="lab-agriculture">
       <p><Link href="/">← Volver al catálogo</Link></p>
       <h1>Laboratorio de Naturaleza y Agricultura <PresenceBadge connected={connected} count={connectedCount} /></h1>
       <p className="subtitle">
-        Modelo real de grados-día de crecimiento (GDD), adaptador{" "}
-        <span className="badge">agriculture-gdd v0.1.0</span> · nivel de fidelidad 2/5.
+        Arrastrá parcelas al campo y simulá cada una por separado con el modelo real de grados-día de
+        crecimiento (GDD), adaptador <span className="badge">agriculture-gdd v0.2.0</span> · nivel de
+        fidelidad 2/5.
       </p>
       <p className="subtitle" style={{ color: "var(--bad)" }}>
-        Importante: la temperatura base y los umbrales de etapa son parámetros que vos ingresás, no datos
-        verificados por especie — docs/00-discovery.md prohíbe inventar esos valores. Si vas a usar esto para
-        una especie real, verificá los umbrales con una fuente agronómica (INTA, extensión universitaria, etc.)
-        antes de confiar en el resultado.
+        Importante: la temperatura base y los umbrales de etapa son parámetros que vos ingresás (o presets de
+        referencia sin verificar), no datos confirmados por especie. Si vas a usar esto para una especie real,
+        verificá los umbrales con una fuente agronómica (INTA, extensión universitaria, etc.) antes de confiar
+        en el resultado.
       </p>
 
       <section className="panel">
-        <h3 style={{ marginTop: 0 }}>Parámetros del modelo</h3>
-        <div className="row">
-          <label>Temperatura base (°C):
-            <input type="number" value={tBase} onChange={(e) => setTBase(Number(e.target.value))} style={{ width: 60, marginLeft: 6 }} />
-          </label>
-        </div>
-        <div className="row" style={{ marginTop: 8 }}>
-          <label>GDD germinación:
-            <input type="number" value={thresholds.germination} onChange={(e) => setThresholds({ ...thresholds, germination: Number(e.target.value) })} style={{ width: 70, marginLeft: 6 }} />
-          </label>
-          <label>GDD floración:
-            <input type="number" value={thresholds.flowering} onChange={(e) => setThresholds({ ...thresholds, flowering: Number(e.target.value) })} style={{ width: 70, marginLeft: 6 }} />
-          </label>
-          <label>GDD madurez:
-            <input type="number" value={thresholds.maturity} onChange={(e) => setThresholds({ ...thresholds, maturity: Number(e.target.value) })} style={{ width: 70, marginLeft: 6 }} />
-          </label>
-        </div>
+        <h3 style={{ marginTop: 0 }}>Campo ({plots.length} parcela{plots.length !== 1 ? "s" : ""})</h3>
+        <InteractiveCanvas
+          pieceTypes={PIECE_TYPES}
+          pieces={pieces}
+          links={[]}
+          allowLinks={false}
+          selectedUid={selectedId}
+          onPlace={placePlot}
+          onMove={movePlot}
+          onSelect={setSelectedId}
+          onDelete={deletePlot}
+          onLink={() => {}}
+        />
 
-        <h3>Clima diario ({days.length} días)</h3>
-        <div className="row">
-          <label>Generar: <input type="number" value={genCount} onChange={(e) => setGenCount(Number(e.target.value))} style={{ width: 55, marginLeft: 4 }} /></label>
-          <label>días con tmin <input type="number" value={genTmin} onChange={(e) => setGenTmin(Number(e.target.value))} style={{ width: 50, marginLeft: 4 }} /></label>
-          <label>y tmax <input type="number" value={genTmax} onChange={(e) => setGenTmax(Number(e.target.value))} style={{ width: 50, marginLeft: 4 }} /></label>
-          <button className="secondary" onClick={() => setDays(makeDays(genCount, genTmin, genTmax))}>Generar serie</button>
-        </div>
+        {selected && (
+          <div className="props-panel" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+            <div className="row">
+              <strong>{selected.label}</strong>
+              <label>Temp. base (°C): <input type="number" value={selected.t_base} onChange={(e) => updateSelected({ t_base: Number(e.target.value) })} style={{ width: 60 }} /></label>
+            </div>
+            <div className="row">
+              {Object.keys(SPECIES_REFERENCE).map((name) => (
+                <button key={name} className="secondary" onClick={() => {
+                  const ref = SPECIES_REFERENCE[name];
+                  updateSelected({ t_base: ref.t_base, thresholds: { germination: ref.germination, flowering: ref.flowering, maturity: ref.maturity } });
+                }}>{name}</button>
+              ))}
+            </div>
+            <div className="row">
+              <label>GDD germinación: <input type="number" value={selected.thresholds.germination} onChange={(e) => updateSelected({ thresholds: { ...selected.thresholds, germination: Number(e.target.value) } })} style={{ width: 70 }} /></label>
+              <label>GDD floración: <input type="number" value={selected.thresholds.flowering} onChange={(e) => updateSelected({ thresholds: { ...selected.thresholds, flowering: Number(e.target.value) } })} style={{ width: 70 }} /></label>
+              <label>GDD madurez: <input type="number" value={selected.thresholds.maturity} onChange={(e) => updateSelected({ thresholds: { ...selected.thresholds, maturity: Number(e.target.value) } })} style={{ width: 70 }} /></label>
+            </div>
+            <div className="row">
+              <label>Generar {selected.days.length} días con tmin
+                <input type="number" defaultValue={15} id={`tmin-${selected.label}`} style={{ width: 50, marginLeft: 4 }} />
+              </label>
+              <label>y tmax
+                <input type="number" defaultValue={27} id={`tmax-${selected.label}`} style={{ width: 50, marginLeft: 4 }} />
+              </label>
+              <label>días
+                <input type="number" defaultValue={selected.days.length} id={`n-${selected.label}`} style={{ width: 55, marginLeft: 4 }} />
+              </label>
+              <button className="secondary" onClick={() => {
+                const n = Number((document.getElementById(`n-${selected.label}`) as HTMLInputElement).value);
+                const tmin = Number((document.getElementById(`tmin-${selected.label}`) as HTMLInputElement).value);
+                const tmax = Number((document.getElementById(`tmax-${selected.label}`) as HTMLInputElement).value);
+                updateSelected({ days: makeDays(n, tmin, tmax) });
+              }}>Generar serie de clima</button>
+            </div>
+          </div>
+        )}
 
         <div className="row" style={{ marginTop: 10 }}>
           <button onClick={saveAndRun} disabled={busy}>{busy ? "Ejecutando…" : "Guardar y ejecutar"}</button>
@@ -131,26 +187,42 @@ export default function AgriculturePage() {
         {error && <p className="error">{error}</p>}
       </section>
 
-      {lastRun && (
+      {selected && selectedResult && (
         <>
           <section className="panel">
-            <h3 style={{ marginTop: 0 }}>Acumulación de GDD</h3>
-            <GrowthChart series={lastRun.result.series} thresholds={thresholds} />
+            <h3 style={{ marginTop: 0 }}>Acumulación de GDD — {selected.label}</h3>
+            <GrowthChart series={selectedResult.series} thresholds={selected.thresholds} />
           </section>
           <section className="panel">
-            <h3 style={{ marginTop: 0 }}>Resultado</h3>
-            <p>Estado actual: <strong>{lastRun.result.current_stage}</strong> · GDD total acumulado: {lastRun.result.total_gdd.toFixed(1)}</p>
+            <h3 style={{ marginTop: 0 }}>Resultado — {selected.label}</h3>
+            <p>Estado actual: <strong>{selectedResult.current_stage}</strong> · GDD total acumulado: {selectedResult.total_gdd.toFixed(1)}</p>
             <table>
               <thead><tr><th>Etapa</th><th>Día en que se alcanzó</th></tr></thead>
               <tbody>
-                <tr><td>Germinación</td><td>{lastRun.result.stage_reached_on_day.germination ?? "no alcanzada"}</td></tr>
-                <tr><td>Floración</td><td>{lastRun.result.stage_reached_on_day.flowering ?? "no alcanzada"}</td></tr>
-                <tr><td>Madurez</td><td>{lastRun.result.stage_reached_on_day.maturity ?? "no alcanzada"}</td></tr>
+                <tr><td>Germinación</td><td>{selectedResult.stage_reached_on_day.germination ?? "no alcanzada"}</td></tr>
+                <tr><td>Floración</td><td>{selectedResult.stage_reached_on_day.flowering ?? "no alcanzada"}</td></tr>
+                <tr><td>Madurez</td><td>{selectedResult.stage_reached_on_day.maturity ?? "no alcanzada"}</td></tr>
               </tbody>
             </table>
           </section>
         </>
       )}
+
+      {lastRun && lastRun.result.plots.length > 1 && (
+        <section className="panel">
+          <h3 style={{ marginTop: 0 }}>Comparación de parcelas</h3>
+          <table>
+            <thead><tr><th>Parcela</th><th>Estado</th><th>GDD total</th></tr></thead>
+            <tbody>
+              {lastRun.result.plots.map((p) => (
+                <tr key={p.label}><td>{p.label}</td><td>{p.current_stage}</td><td>{p.total_gdd.toFixed(1)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      <TutorPanel projectId={project?.id ?? null} />
     </main>
   );
 }

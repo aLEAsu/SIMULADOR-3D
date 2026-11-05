@@ -5,18 +5,30 @@ from . import solver
 
 ADAPTER_METADATA = {
     "name": "physics-mechanics-rk4",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "discipline": "physics",
     "fidelity_level": 3,
-    "fidelity_label": "cientifico (integracion RK4 de F=ma; gravedad, resorte de Hooke, amortiguamiento lineal)",
-    "supported_components": ["gravity", "spring", "damping"],
-    "units": {"mass": "kg", "length": "m", "time": "s", "spring_k": "N/m", "damping_c": "N*s/m"},
+    "fidelity_label": (
+        "cientifico (integracion RK4; point_mass con gravedad/resorte/amortiguamiento, "
+        "pendulo no lineal, plano inclinado con friccion cinetica; multi-cuerpo = N cuerpos "
+        "independientes resueltos con el mismo integrador)"
+    ),
+    "supported_components": ["gravity", "spring", "damping", "pendulum", "incline", "bodies"],
+    "units": {
+        "mass": "kg", "length": "m", "time": "s", "spring_k": "N/m", "damping_c": "N*s/m (point_mass) o 1/s (pendulum)",
+        "incline_angle_deg": "grados", "incline_friction_mu": "adimensional",
+    },
     "engine_license": "implementación propia (MIT del proyecto); referencia de validación: myPhysicsLab (Apache-2.0)",
 }
 
 
 def _to_scene(scene: dict) -> solver.PhysicsScene:
-    return solver.PhysicsScene(**scene)
+    scene = dict(scene)
+    bodies = scene.pop("bodies", None)
+    result = solver.PhysicsScene(**scene)
+    if bodies is not None:
+        result.bodies = [_to_scene(b) for b in bodies]
+    return result
 
 
 def validate(scene: dict) -> dict:

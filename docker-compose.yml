@@ -19,6 +19,7 @@ services:
     build: ./apps/api
     environment:
       DATABASE_URL: postgresql://usl:usl@db:5432/usl
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "8000:8000"
     depends_on:

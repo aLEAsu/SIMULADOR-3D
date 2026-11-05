@@ -54,6 +54,16 @@ def validate(t_base: float, days: list[DailyWeather], thresholds: Thresholds) ->
     return errors
 
 
+def run_growth_multi(plots: list[tuple[str, float, list[DailyWeather], Thresholds]]) -> dict:
+    """Multiple plots side by side — each is just an independent GDD run
+    through run_growth; there is no interaction between plots (no shared
+    soil/water model), so "multi-plot" here means N independent solves,
+    not new agronomy."""
+    if not plots:
+        raise GrowthModelError("Se necesita al menos una parcela.")
+    return {"plots": [{"label": label, **run_growth(t_base, days, thresholds)} for label, t_base, days, thresholds in plots]}
+
+
 def run_growth(t_base: float, days: list[DailyWeather], thresholds: Thresholds) -> dict:
     errors = validate(t_base, days, thresholds)
     if errors:

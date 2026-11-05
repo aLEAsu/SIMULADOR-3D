@@ -12,13 +12,17 @@ from . import solver
 
 ADAPTER_METADATA = {
     "name": "robotics-arm2-kinematics",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "discipline": "robotics",
     "fidelity_level": 3,
-    "fidelity_label": "cientifico (cinematica inversa exacta por ley de cosenos, verificada por cinematica directa; sin dinamica)",
-    "supported_components": ["link1", "link2", "target"],
+    "fidelity_label": (
+        "cientifico (cinematica inversa exacta; 2 eslabones por ley de cosenos, "
+        "3 eslabones por desacople posicion/orientacion de la muneca, ambos verificados "
+        "por cinematica directa; sin dinamica)"
+    ),
+    "supported_components": ["link1", "link2", "link3 (opcional)", "target"],
     "units": {"length": "m (o cualquier unidad consistente)", "angle": "grados"},
-    "engine_license": "implementación propia (MIT del proyecto) sobre el modelo estándar de cinemática de brazos planares de 2 eslabones",
+    "engine_license": "implementación propia (MIT del proyecto) sobre el modelo estándar de cinemática de brazos planares",
 }
 
 

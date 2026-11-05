@@ -13,8 +13,26 @@ Plataforma universal de laboratorios científicos virtuales. Ver [docs/00-discov
   - **Robótica** (`robotics-arm2-kinematics`): cinemática inversa exacta de un brazo planar de 2 eslabones (ley de cosenos), verificada por cinemática directa (error ~10⁻¹⁵). Solo cinemática, sin dinámica ni motor físico.
   - **Colaboración en tiempo real** (`apps/api/connection_manager.py`, WebSocket en `/ws/projects/{id}`): cambios de escena y corridas se sincronizan en vivo entre todos los clientes conectados al mismo proyecto, con contador de presencia, en los 6 laboratorios. Verificado con dos pestañas reales. Sin resolución de conflictos ni permisos — último guardado gana.
   - **Persistencia real y Docker** (Fase 7): `apps/api/db.py` reemplazó el JSON por PostgreSQL (`asyncpg`, tablas `projects`/`runs`); `docker-compose.yml` orquesta `db` + `api` + `web`. Verificado con `docker compose up --build`: los 6 laboratorios probados en el navegador y los datos confirmados directamente por `psql` en la base real (no solo "se ve bien en la pantalla").
-- **Pendiente:** anatomía (bloqueada por decisión de licencia de modelos 3D), dinámica de robots (Webots/MuJoCo, evaluación pendiente), tutor de IA, aulas/evaluaciones, creación de laboratorios por usuarios, SoilGrids, editor por arrastre, colas/monitorización/CI-CD. Ver el roadmap.
+  - **Anatomía — sistema óseo** (`/anatomy`): visor 3D real con Three.js, modelo derivado de BodyParts3D vía Z-Anatomy (CC BY-SA 4.0, decisión confirmada por el usuario), convertido de FBX a GLB con Blender headless (`tools/anatomy/convert_fbx_to_glb.py`). 2029 estructuras óseas reales, filtro/selección/aislamiento verificados en navegador. Es un visor, no pasa por el registro de adaptadores (no hay "cálculo" que hacer). Atribución legal completa en la página.
+  - **Tutor de IA** (`apps/api/tutor.py`): llama a la API de Anthropic con el estado real del proyecto como contexto; nunca inventa resultados numéricos, solo explica los que ya calculó el motor. Integrado en los 6 laboratorios. Requiere `ANTHROPIC_API_KEY` en un `.env` propio (ver `.env.example`) — **todavía no probado de punta a punta** porque no se cargó una clave real en este entorno.
+- **Pendiente:** otros sistemas anatómicos (muscular, cardiovascular, etc. — mismo pipeline ya probado), dinámica de robots (Webots/MuJoCo, evaluación pendiente), aulas/evaluaciones, creación de laboratorios por usuarios, SoilGrids, editor por arrastre, colas/monitorización/CI-CD. Ver el roadmap.
 - **Nota de seguridad pendiente:** `npm audit` reporta vulnerabilidades en la cadena de dependencias de Next.js 14.2.x (incluye un CVE de RCE en Windows en versiones no parcheadas); se fijó `next@14.2.35` (la última parchada en la rama 14) pero no se migró a Next 16 en esta sesión para no introducir un cambio mayor sin probarlo. Antes de exponer esto fuera de `localhost`, revisar `npm audit` y considerar la migración a Next 15/16.
+
+## Tutor de IA (opcional)
+
+```bash
+cp .env.example .env
+```
+
+Completá `ANTHROPIC_API_KEY` en ese `.env` (nunca lo pegues en el chat ni lo commitees — ya está en `.gitignore`). Sin esa clave, el resto de la plataforma funciona igual; solo el tutor responde con un error claro en vez de romperse.
+
+## Agregar otro sistema anatómico
+
+Los demás archivos FBX (muscular, cardiovascular, nervioso, etc.) ya están identificados en `github.com/LluisV/Z-Anatomy` (carpeta `Resources/Models/FBX/`). Con Blender instalado:
+
+```bash
+blender --background --python tools/anatomy/convert_fbx_to_glb.py -- INPUT.fbx apps/web/public/models/anatomy/OUTPUT.glb
+```
 
 ## Correr
 

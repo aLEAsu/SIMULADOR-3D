@@ -10,12 +10,19 @@ from . import solver
 
 ADAPTER_METADATA = {
     "name": "electronics-dc",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "discipline": "electronics",
     "fidelity_level": 3,  # 1 conceptual .. 5 validado experimentalmente
-    "fidelity_label": "cientifico (analisis nodal DC, sin componentes no lineales)",
-    "supported_components": ["resistor", "dc_source"],
-    "units": {"resistor": "ohm", "dc_source": "volt"},
+    "fidelity_label": (
+        "cientifico (analisis nodal DC; LED modelado como diodo lineal a tramos "
+        "Vf+Ron, iterando estados ON/OFF hasta encontrar uno autoconsistente)"
+    ),
+    "supported_components": ["resistor", "dc_source", "switch", "capacitor", "led"],
+    "units": {
+        "resistor": "ohm", "dc_source": "volt", "switch": "boolean (closed)",
+        "capacitor": "farad (informativo; circuito abierto en DC estacionario)",
+        "led": "forward_voltage: volt, forward_resistance: ohm",
+    },
     "engine_license": "implementacion propia (MIT del proyecto); candidato de reemplazo: ngspice (BSD-3-Clause)",
 }
 

@@ -7,6 +7,8 @@ export interface TitrationScene {
   titrant_conc: number;
   max_titrant_volume: number;
   steps: number;
+  ka?: number | null;
+  kb?: number | null;
 }
 
 export interface TitrationPoint {

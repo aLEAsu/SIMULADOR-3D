@@ -11,18 +11,28 @@ from . import solver
 
 ADAPTER_METADATA = {
     "name": "networking-topology",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "discipline": "networking",
     "fidelity_level": 2,
-    "fidelity_label": "educativo cuantitativo (subnetting real + alcanzabilidad por grafo, sin emulación de SO real)",
-    "supported_components": ["pc", "router", "switch"],
-    "units": {"ip": "ipv4", "prefix": "bits CIDR"},
+    "fidelity_label": (
+        "educativo cuantitativo (subnetting real + alcanzabilidad por grafo con VLANs "
+        "y reglas de firewall afectando el resultado, sin emulación de SO real)"
+    ),
+    "supported_components": ["pc", "router", "switch", "firewall", "ap"],
+    "units": {"ip": "ipv4", "prefix": "bits CIDR", "vlan_id": "entero", "link_type": "copper | fiber | wireless (informativo)"},
     "engine_license": "implementación propia (MIT del proyecto) sobre ipaddress de la librería estándar de Python",
 }
 
 
 def _to_devices(scene: dict) -> list[solver.Device]:
-    return [solver.Device(**item) for item in scene.get("devices", [])]
+    devices = []
+    for item in scene.get("devices", []):
+        item = dict(item)
+        rules = item.pop("rules", None) or []
+        d = solver.Device(**item)
+        d.rules = [solver.FirewallRule(**r) for r in rules]
+        devices.append(d)
+    return devices
 
 
 def _to_links(scene: dict) -> list[solver.Link]:

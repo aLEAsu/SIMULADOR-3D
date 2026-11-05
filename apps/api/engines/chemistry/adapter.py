@@ -11,12 +11,15 @@ from . import solver
 
 ADAPTER_METADATA = {
     "name": "chemistry-titration-strong",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "discipline": "chemistry",
     "fidelity_level": 3,
-    "fidelity_label": "cientifico (balance de moles exacto, acido/base fuerte, 25 C; no modela equilibrios debiles)",
-    "supported_components": ["analyte", "titrant"],
-    "units": {"concentration": "mol/L", "volume": "L"},
+    "fidelity_label": (
+        "cientifico (balance de moles exacto para acido/base fuerte; equilibrio acido/base debil "
+        "resuelto numericamente por balance de carga exacto cuando se da ka/kb, 25 C)"
+    ),
+    "supported_components": ["analyte", "titrant", "ka", "kb"],
+    "units": {"concentration": "mol/L", "volume": "L", "ka": "adimensional", "kb": "adimensional"},
     "engine_license": "implementación propia (MIT del proyecto) sobre el modelo estándar de titulación ácido-base de química general",
 }
 

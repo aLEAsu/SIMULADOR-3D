@@ -42,6 +42,8 @@ class TitrationScene:
     titrant_conc: float  # mol/L
     max_titrant_volume: float  # L
     steps: int = 40
+    ka: float | None = None  # weak acid equilibrium constant, only when analyte_type == "acid"
+    kb: float | None = None  # weak base equilibrium constant, only when analyte_type == "base"
 
 
 def validate(scene: TitrationScene) -> list[str]:
@@ -58,14 +60,67 @@ def validate(scene: TitrationScene) -> list[str]:
         errors.append("El volumen máximo de titulante debe ser > 0 L.")
     if not (1 <= scene.steps <= 2000):
         errors.append("steps debe estar entre 1 y 2000.")
+    if scene.ka is not None and scene.ka <= 0:
+        errors.append("Ka debe ser > 0.")
+    if scene.kb is not None and scene.kb <= 0:
+        errors.append("Kb debe ser > 0.")
+    if scene.analyte_type == "base" and scene.ka is not None:
+        errors.append("ka no aplica cuando el analito es una base (usá kb).")
+    if scene.analyte_type == "acid" and scene.kb is not None:
+        errors.append("kb no aplica cuando el analito es un ácido (usá ka).")
     return errors
 
 
+def _solve_h_bisection(f, lo_exp: float = -14.0, hi_exp: float = 1.0, iters: int = 200) -> float:
+    """f([H+]) is monotonically increasing in [H+] for every charge-balance
+    equation used below (more H+ always pushes the LHS of the balance up
+    and the RHS down), so a plain bisection on log10([H+]) is exact,
+    robust, and needs no initial guess — unlike Newton's method here."""
+    lo, hi = lo_exp, hi_exp
+    f_lo = f(10 ** lo)
+    for _ in range(iters):
+        mid = (lo + hi) / 2
+        if (f(10 ** mid) > 0) == (f_lo > 0):
+            lo = mid
+        else:
+            hi = mid
+    return 10 ** ((lo + hi) / 2)
+
+
 def _ph_at(scene: TitrationScene, v_titrant: float) -> float:
+    total_volume = scene.analyte_volume + v_titrant
+    c_analyte = scene.analyte_conc * scene.analyte_volume / total_volume
+    c_titrant = scene.titrant_conc * v_titrant / total_volume
+
+    if scene.analyte_type == "acid" and scene.ka is not None:
+        # Weak monoprotic acid HA titrated with strong base: exact charge
+        # balance [Na+] + [H+] = [OH-] + [A-], with [A-] = C_HA_total *
+        # Ka/(Ka+[H+]) (the standard alpha-fraction form). Solved
+        # numerically, not via the Henderson-Hasselbalch approximation.
+        ka = scene.ka
+        def f(h: float) -> float:
+            oh = KW_25C / h
+            a_minus = c_analyte * ka / (ka + h)
+            return (c_titrant + h) - (oh + a_minus)
+        h = _solve_h_bisection(f)
+        return -math.log10(h)
+
+    if scene.analyte_type == "base" and scene.kb is not None:
+        # Weak monoprotic base B titrated with strong acid: exact charge
+        # balance [H+] + [BH+] = [OH-] + [X-] (X- = strong-acid
+        # counterion), with [BH+] = C_B_total * [H+]/(Ka_conj+[H+]) where
+        # Ka_conj = Kw/Kb is the conjugate acid's Ka.
+        ka_conj = KW_25C / scene.kb
+        def f(h: float) -> float:
+            oh = KW_25C / h
+            bh_plus = c_analyte * h / (ka_conj + h)
+            return (h + bh_plus) - (oh + c_titrant)
+        h = _solve_h_bisection(f)
+        return -math.log10(h)
+
+    # Strong acid / strong base: exact closed-form mole balance.
     moles_analyte = scene.analyte_conc * scene.analyte_volume
     moles_titrant = scene.titrant_conc * v_titrant
-    total_volume = scene.analyte_volume + v_titrant
-
     if scene.analyte_type == "acid":
         net = moles_analyte - moles_titrant  # moles_H - moles_OH
     else:

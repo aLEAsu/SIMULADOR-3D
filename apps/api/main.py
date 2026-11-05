@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 import db
+import tutor
 from connection_manager import manager
 from engines.agriculture.solver import GrowthModelError
 from engines.chemistry.solver import TitrationError
@@ -16,6 +20,16 @@ from engines.networking.solver import TopologyError
 from engines.physics.solver import PhysicsError
 from engines.registry import get_adapter, list_metadata
 from engines.robotics.solver import KinematicsError
+
+# Local (non-Docker) dev convenience: pick up a .env at the repo root
+# (apps/api/main.py -> apps/api -> apps -> repo root). In Docker the
+# directory is flattened to just /app, so there aren't 3 parents to
+# climb — .parent chaining (unlike .parents[n]) can't raise there, it just
+# bottoms out at "/", and the existence check below skips loading, which
+# is correct: docker-compose already injects env vars directly.
+_dotenv_path = Path(__file__).resolve().parent.parent.parent / ".env"
+if _dotenv_path.exists():
+    load_dotenv(_dotenv_path)
 
 
 @asynccontextmanager
@@ -49,6 +63,10 @@ class ProjectCreate(BaseModel):
 
 class SceneIn(BaseModel):
     scene: dict[str, Any]
+
+
+class TutorQuestion(BaseModel):
+    question: str
 
 
 @app.get("/api/engines")
@@ -120,6 +138,18 @@ async def project_ws(websocket: WebSocket, project_id: str):
             await websocket.receive_text()
     except WebSocketDisconnect:
         await manager.disconnect(project_id, websocket)
+
+
+@app.post("/api/projects/{project_id}/tutor")
+async def ask_tutor(project_id: str, body: TutorQuestion):
+    project = await db.get_project(project_id)
+    if project is None:
+        raise HTTPException(404, "Proyecto no encontrado")
+    try:
+        answer = await run_in_threadpool(tutor.ask, project, body.question)
+    except tutor.TutorError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    return {"answer": answer}
 
 
 @app.get("/api/projects/{project_id}/runs")

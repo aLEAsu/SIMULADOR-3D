@@ -50,6 +50,16 @@ export default function HomePage() {
             </div>
           );
         })}
+
+        <div className="panel" style={{ width: 300 }}>
+          <h3 style={{ marginTop: 0 }}>Anatomía</h3>
+          <p style={{ fontSize: 13, color: "var(--muted)" }}>
+            Visor 3D <span className="badge">sin motor de cálculo</span>
+          </p>
+          <p style={{ fontSize: 13 }}>jerárquico (modelo real derivado de BodyParts3D vía Z-Anatomy, CC BY-SA)</p>
+          <p style={{ fontSize: 12, color: "var(--muted)" }}>No aplica nivel de fidelidad (no es una simulación)</p>
+          <Link href="/anatomy"><button>Entrar</button></Link>
+        </div>
       </div>
     </main>
   );
