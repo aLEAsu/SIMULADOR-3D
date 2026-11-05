@@ -9,6 +9,8 @@ const LAB_LINKS: Record<string, { href: string; title: string }> = {
   networking: { href: "/networking", title: "Redes" },
   agriculture: { href: "/agriculture", title: "Naturaleza y Agricultura" },
   physics: { href: "/physics", title: "Física" },
+  chemistry: { href: "/chemistry", title: "Química" },
+  robotics: { href: "/robotics", title: "Robótica" },
 };
 
 export default function HomePage() {
