@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, Project, Run } from "../lib/api";
+import { useCollaboration } from "../lib/useCollaboration";
+import PresenceBadge from "../lib/PresenceBadge";
 import { DailyWeather, GrowthResult, Thresholds } from "./types";
 import GrowthChart from "./GrowthChart";
 
@@ -42,6 +44,19 @@ export default function AgriculturePage() {
     }
   }, []);
 
+  const { connected, connectedCount } = useCollaboration<
+    { t_base: number; days: DailyWeather[]; thresholds: Thresholds },
+    GrowthResult
+  >({
+    projectId: project?.id ?? null,
+    onSceneUpdated: (scene) => {
+      if (scene.t_base) setTBase(scene.t_base);
+      if (scene.days?.length) setDays(scene.days);
+      if (scene.thresholds) setThresholds(scene.thresholds);
+    },
+    onRunAdded: (run) => setLastRun(run),
+  });
+
   async function ensureProject(): Promise<Project> {
     if (project) return project;
     const p = await api.createProject("Ciclo de cultivo (GDD)", DISCIPLINE);
@@ -70,7 +85,7 @@ export default function AgriculturePage() {
   return (
     <main>
       <p><Link href="/">← Volver al catálogo</Link></p>
-      <h1>Laboratorio de Naturaleza y Agricultura</h1>
+      <h1>Laboratorio de Naturaleza y Agricultura <PresenceBadge connected={connected} count={connectedCount} /></h1>
       <p className="subtitle">
         Modelo real de grados-día de crecimiento (GDD), adaptador{" "}
         <span className="badge">agriculture-gdd v0.1.0</span> · nivel de fidelidad 2/5.

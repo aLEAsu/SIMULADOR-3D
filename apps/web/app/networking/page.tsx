@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, Project, Run } from "../lib/api";
+import { useCollaboration } from "../lib/useCollaboration";
+import PresenceBadge from "../lib/PresenceBadge";
 import { Device, Link as TopologyLink, TopologyResult } from "./types";
 import TopologyDiagram from "./TopologyDiagram";
 
@@ -48,6 +50,15 @@ export default function NetworkingPage() {
         .catch(() => localStorage.removeItem(STORAGE_KEY));
     }
   }, []);
+
+  const { connected, connectedCount } = useCollaboration<{ devices: Device[]; links: TopologyLink[] }, TopologyResult>({
+    projectId: project?.id ?? null,
+    onSceneUpdated: (scene) => {
+      if (scene.devices?.length) setDevices(scene.devices);
+      if (scene.links?.length) setLinks(scene.links);
+    },
+    onRunAdded: (run) => setLastRun(run),
+  });
 
   async function ensureProject(): Promise<Project> {
     if (project) return project;
@@ -96,7 +107,7 @@ export default function NetworkingPage() {
   return (
     <main>
       <p><Link href="/">← Volver al catálogo</Link></p>
-      <h1>Laboratorio de Redes</h1>
+      <h1>Laboratorio de Redes <PresenceBadge connected={connected} count={connectedCount} /></h1>
       <p className="subtitle">
         Subnetting IPv4 real (módulo <code>ipaddress</code> de Python) + alcanzabilidad por grafo, adaptador{" "}
         <span className="badge">networking-topology v0.1.0</span> · nivel de fidelidad 2/5. Es un simulador

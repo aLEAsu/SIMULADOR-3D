@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, Project, Run } from "../lib/api";
+import { useCollaboration } from "../lib/useCollaboration";
+import PresenceBadge from "../lib/PresenceBadge";
 import { PhysicsResult, PhysicsScene } from "./types";
 import { TrajectoryPlot, EnergyChart } from "./PhysicsCharts";
 
@@ -62,6 +64,12 @@ export default function PhysicsPage() {
     }
   }, []);
 
+  const { connected, connectedCount } = useCollaboration<PhysicsScene, PhysicsResult>({
+    projectId: project?.id ?? null,
+    onSceneUpdated: (scene) => { if (scene && Object.keys(scene).length) setScene(scene); },
+    onRunAdded: (run) => setLastRun(run),
+  });
+
   async function ensureProject(): Promise<Project> {
     if (project) return project;
     const p = await api.createProject("Sistema mecánico", DISCIPLINE);
@@ -95,7 +103,7 @@ export default function PhysicsPage() {
   return (
     <main>
       <p><Link href="/">← Volver al catálogo</Link></p>
-      <h1>Laboratorio de Física</h1>
+      <h1>Laboratorio de Física <PresenceBadge connected={connected} count={connectedCount} /></h1>
       <p className="subtitle">
         Integración numérica real RK4 de F=ma (gravedad, resorte de Hooke, amortiguamiento lineal), adaptador{" "}
         <span className="badge">physics-mechanics-rk4 v0.1.0</span> · nivel de fidelidad 3/5.

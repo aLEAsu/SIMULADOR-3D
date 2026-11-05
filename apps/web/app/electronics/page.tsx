@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, Project, Run } from "../lib/api";
+import { useCollaboration } from "../lib/useCollaboration";
+import PresenceBadge from "../lib/PresenceBadge";
 import { CircuitComponent, CircuitResult } from "./types";
 import CircuitDiagram from "./CircuitDiagram";
 
@@ -38,6 +40,15 @@ export default function ElectronicsPage() {
         .catch(() => localStorage.removeItem(STORAGE_KEY));
     }
   }, []);
+
+  const { connected, connectedCount } = useCollaboration<{ components: CircuitComponent[] }, CircuitResult>({
+    projectId: project?.id ?? null,
+    onSceneUpdated: (scene) => { if (scene.components?.length) setComponents(scene.components); },
+    onRunAdded: (run) => {
+      setLastRun(run);
+      setRuns((prev) => (prev.some((r) => r.id === run.id) ? prev : [...prev, run]));
+    },
+  });
 
   async function ensureProject(): Promise<Project> {
     if (project) return project;
@@ -81,7 +92,7 @@ export default function ElectronicsPage() {
   return (
     <main>
       <p><Link href="/">← Volver al catálogo</Link></p>
-      <h1>Laboratorio de Electrónica</h1>
+      <h1>Laboratorio de Electrónica <PresenceBadge connected={connected} count={connectedCount} /></h1>
       <p className="subtitle">
         Análisis nodal DC real (NumPy), adaptador <span className="badge">electronics-dc v0.1.0</span>{" "}
         · nivel de fidelidad 3/5. No es una animación: cambia un valor y vuelve a ejecutar para comprobarlo.

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, Project, Run } from "../lib/api";
+import { useCollaboration } from "../lib/useCollaboration";
+import PresenceBadge from "../lib/PresenceBadge";
 import { TitrationResult, TitrationScene } from "./types";
 import TitrationChart from "./TitrationChart";
 
@@ -40,6 +42,12 @@ export default function ChemistryPage() {
     }
   }, []);
 
+  const { connected, connectedCount } = useCollaboration<TitrationScene, TitrationResult>({
+    projectId: project?.id ?? null,
+    onSceneUpdated: (scene) => { if (scene && Object.keys(scene).length) setScene(scene); },
+    onRunAdded: (run) => setLastRun(run),
+  });
+
   async function ensureProject(): Promise<Project> {
     if (project) return project;
     const p = await api.createProject("Titulación ácido-base", DISCIPLINE);
@@ -76,7 +84,7 @@ export default function ChemistryPage() {
   return (
     <main>
       <p><Link href="/">← Volver al catálogo</Link></p>
-      <h1>Laboratorio de Química</h1>
+      <h1>Laboratorio de Química <PresenceBadge connected={connected} count={connectedCount} /></h1>
       <p className="subtitle">
         Titulación ácido-base fuerte: balance de moles exacto (no equilibrio débil), adaptador{" "}
         <span className="badge">chemistry-titration-strong v0.1.0</span> · nivel de fidelidad 3/5. Kw=1.0×10⁻¹⁴ a 25°C.

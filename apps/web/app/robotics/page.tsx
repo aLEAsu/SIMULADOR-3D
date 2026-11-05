@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, Project, Run } from "../lib/api";
+import { useCollaboration } from "../lib/useCollaboration";
+import PresenceBadge from "../lib/PresenceBadge";
 import { ArmResult, ArmScene } from "./types";
 import ArmDiagram from "./ArmDiagram";
 
@@ -32,6 +34,12 @@ export default function RoboticsPage() {
         .catch(() => localStorage.removeItem(STORAGE_KEY));
     }
   }, []);
+
+  const { connected, connectedCount } = useCollaboration<ArmScene, ArmResult>({
+    projectId: project?.id ?? null,
+    onSceneUpdated: (scene) => { if (scene && Object.keys(scene).length) setScene(scene); },
+    onRunAdded: (run) => setLastRun(run),
+  });
 
   async function ensureProject(): Promise<Project> {
     if (project) return project;
@@ -64,7 +72,7 @@ export default function RoboticsPage() {
   return (
     <main>
       <p><Link href="/">← Volver al catálogo</Link></p>
-      <h1>Laboratorio de Robótica</h1>
+      <h1>Laboratorio de Robótica <PresenceBadge connected={connected} count={connectedCount} /></h1>
       <p className="subtitle">
         Cinemática inversa exacta (ley de cosenos) de un brazo planar de 2 eslabones, verificada por cinemática
         directa, adaptador <span className="badge">robotics-arm2-kinematics v0.1.0</span> · nivel de fidelidad 3/5.

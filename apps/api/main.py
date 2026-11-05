@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import storage
+from connection_manager import manager
 from engines.agriculture.solver import GrowthModelError
 from engines.chemistry.solver import TitrationError
 from engines.electronics.solver import CircuitError
@@ -67,10 +68,11 @@ def get_project(project_id: str):
 
 
 @app.put("/api/projects/{project_id}/scene")
-def save_scene(project_id: str, body: SceneIn):
+async def save_scene(project_id: str, body: SceneIn):
     project = storage.save_scene(project_id, body.scene)
     if project is None:
         raise HTTPException(404, "Proyecto no encontrado")
+    await manager.broadcast(project_id, {"type": "scene_updated", "project": project})
     return project
 
 
@@ -84,7 +86,7 @@ def validate_experiment(project_id: str, body: SceneIn):
 
 
 @app.post("/api/projects/{project_id}/run")
-def run_experiment(project_id: str):
+async def run_experiment(project_id: str):
     project = storage.get_project(project_id)
     if project is None:
         raise HTTPException(404, "Proyecto no encontrado")
@@ -94,7 +96,19 @@ def run_experiment(project_id: str):
     except ENGINE_ERRORS as exc:
         raise HTTPException(422, str(exc)) from exc
     run_record = storage.append_run(project_id, project["scene"], result)
+    await manager.broadcast(project_id, {"type": "run_added", "run": run_record})
     return run_record
+
+
+@app.websocket("/ws/projects/{project_id}")
+async def project_ws(websocket: WebSocket, project_id: str):
+    await manager.connect(project_id, websocket)
+    try:
+        while True:
+            # Clients don't need to send anything; this just detects disconnects.
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        await manager.disconnect(project_id, websocket)
 
 
 @app.get("/api/projects/{project_id}/runs")
