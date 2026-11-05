@@ -7,7 +7,7 @@ import { useCollaboration } from "../lib/useCollaboration";
 import PresenceBadge from "../lib/PresenceBadge";
 import TutorPanel from "../lib/TutorPanel";
 import InteractiveCanvas, { Piece } from "../lib/InteractiveCanvas";
-import { GrowthResult, GrowthScene, Plot } from "./types";
+import { GrowthResult, GrowthScene, Plot, PlotResult } from "./types";
 import { PIECE_TYPES, SPECIES_REFERENCE, defaultPlot, makeDays, nextPlotId } from "./canvasAdapter";
 import GrowthChart from "./GrowthChart";
 
@@ -99,11 +99,21 @@ export default function AgriculturePage() {
     }
   }
 
+  // Projects saved before multi-plot shipped have a run whose result is the
+  // old flat shape ({series, total_gdd, ...} at the top level, no `plots`
+  // array) — the backend keeps returning that shape unchanged for any
+  // already-stored row, since it's historical data, not recomputed. Treat
+  // it as a single implicit plot instead of crashing on `.plots.find`.
+  const legacyResult = lastRun?.result as unknown as (Omit<PlotResult, "label"> & { plots?: undefined }) | undefined;
+  const resultPlots: PlotResult[] = lastRun
+    ? lastRun.result.plots ?? (legacyResult ? [{ label: plots[0]?.label ?? "parcela1", ...legacyResult }] : [])
+    : [];
+
   const selected = plots.find((p) => p.label === selectedId);
-  const selectedResult = lastRun?.result.plots.find((p) => p.label === selectedId);
+  const selectedResult = resultPlots.find((p) => p.label === selectedId) ?? resultPlots[0];
 
   const pieces: Piece[] = plots.map((p) => {
-    const r = lastRun?.result.plots.find((pr) => pr.label === p.label);
+    const r = resultPlots.find((pr) => pr.label === p.label);
     return {
       uid: p.label, type: "plot", x: layout[p.label]?.x ?? 100, y: layout[p.label]?.y ?? 100,
       state: p.label === selectedId ? "selected" : "default",
@@ -208,13 +218,13 @@ export default function AgriculturePage() {
         </>
       )}
 
-      {lastRun && lastRun.result.plots.length > 1 && (
+      {resultPlots.length > 1 && (
         <section className="panel">
           <h3 style={{ marginTop: 0 }}>Comparación de parcelas</h3>
           <table>
             <thead><tr><th>Parcela</th><th>Estado</th><th>GDD total</th></tr></thead>
             <tbody>
-              {lastRun.result.plots.map((p) => (
+              {resultPlots.map((p) => (
                 <tr key={p.label}><td>{p.label}</td><td>{p.current_stage}</td><td>{p.total_gdd.toFixed(1)}</td></tr>
               ))}
             </tbody>
