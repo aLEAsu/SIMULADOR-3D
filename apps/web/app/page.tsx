@@ -8,6 +8,7 @@ const LAB_LINKS: Record<string, { href: string; title: string }> = {
   electronics: { href: "/electronics", title: "Electrónica" },
   networking: { href: "/networking", title: "Redes" },
   agriculture: { href: "/agriculture", title: "Naturaleza y Agricultura" },
+  physics: { href: "/physics", title: "Física" },
 };
 
 export default function HomePage() {

@@ -8,7 +8,8 @@ Plataforma universal de laboratorios científicos virtuales. Ver [docs/00-discov
   - **Electrónica** (`electronics-dc`): análisis nodal DC propio en NumPy.
   - **Redes** (`networking-topology`): subnetting IPv4 real (`ipaddress`) + alcanzabilidad por grafo.
   - **Agricultura** (`agriculture-gdd`): modelo de grados-día de crecimiento (GDD).
-- **Pendiente:** física, química, anatomía, robótica, IA, colaboración, SoilGrids, editor por arrastre, Postgres real, Docker. Ver el roadmap.
+  - **Física** (`physics-mechanics-rk4`): integrador RK4 de F=ma (gravedad, resorte de Hooke, amortiguamiento), verificado contra soluciones analíticas (caída libre, oscilador armónico, conservación de energía).
+- **Pendiente:** química, anatomía, robótica, IA, colaboración, SoilGrids, editor por arrastre, Postgres real, Docker. Ver el roadmap.
 - **Nota de persistencia:** el MVP guarda proyectos en `apps/api/data/projects.json` (no en Postgres todavía) para poder demostrar el flujo completo sin levantar una base de datos primero.
 - **Nota de seguridad pendiente:** `npm audit` reporta vulnerabilidades en la cadena de dependencias de Next.js 14.2.x (incluye un CVE de RCE en Windows en versiones no parcheadas); se fijó `next@14.2.35` (la última parchada en la rama 14) pero no se migró a Next 16 en esta sesión para no introducir un cambio mayor sin probarlo. Antes de exponer esto fuera de `localhost`, revisar `npm audit` y considerar la migración a Next 15/16.
 
@@ -31,4 +32,4 @@ npm install
 npm run dev
 ```
 
-Abrir `http://localhost:3000` (catálogo) → `/electronics`, `/networking` o `/agriculture`.
+Abrir `http://localhost:3000` (catálogo) → `/electronics`, `/networking`, `/agriculture` o `/physics`.

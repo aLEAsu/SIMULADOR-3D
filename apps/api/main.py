@@ -10,6 +10,7 @@ import storage
 from engines.agriculture.solver import GrowthModelError
 from engines.electronics.solver import CircuitError
 from engines.networking.solver import TopologyError
+from engines.physics.solver import PhysicsError
 from engines.registry import get_adapter, list_metadata
 
 app = FastAPI(title="Universal Science Lab — Core API (MVP)")
@@ -24,7 +25,7 @@ app.add_middleware(
 # Domain errors raised by adapters are translated to HTTP 422 (not 500):
 # they mean "the scene is scientifically/physically invalid", which is a
 # client-correctable input error, not a server fault.
-ENGINE_ERRORS = (CircuitError, TopologyError, GrowthModelError)
+ENGINE_ERRORS = (CircuitError, TopologyError, GrowthModelError, PhysicsError)
 
 
 class ProjectCreate(BaseModel):

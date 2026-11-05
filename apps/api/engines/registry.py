@@ -9,11 +9,13 @@ from __future__ import annotations
 from engines.agriculture import adapter as agriculture_adapter
 from engines.electronics import adapter as electronics_adapter
 from engines.networking import adapter as networking_adapter
+from engines.physics import adapter as physics_adapter
 
 ADAPTERS = {
     "electronics": electronics_adapter,
     "networking": networking_adapter,
     "agriculture": agriculture_adapter,
+    "physics": physics_adapter,
 }
 
 
