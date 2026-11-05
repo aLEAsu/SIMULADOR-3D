@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 apps/api/data/*.json
 .env*.local
+*.tsbuildinfo

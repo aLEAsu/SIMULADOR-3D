@@ -53,10 +53,10 @@ export default function PhysicsPage() {
     const existing = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
     if (existing) {
       api
-        .getProject<PhysicsScene>(existing)
+        .getProject(existing)
         .then((p) => {
           setProject(p);
-          if (p.scene && Object.keys(p.scene).length) setScene(p.scene);
+          if (p.scene && Object.keys(p.scene).length) setScene(p.scene as unknown as PhysicsScene);
           const typedRuns = p.runs as unknown as Run<PhysicsResult>[];
           if (typedRuns.length) setLastRun(typedRuns[typedRuns.length - 1]);
         })

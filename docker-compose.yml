@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: usl
+      POSTGRES_PASSWORD: usl
+      POSTGRES_DB: usl
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U usl -d usl"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  api:
+    build: ./apps/api
+    environment:
+      DATABASE_URL: postgresql://usl:usl@db:5432/usl
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

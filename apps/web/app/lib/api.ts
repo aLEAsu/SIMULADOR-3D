@@ -49,7 +49,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, discipline }),
     }),
-  getProject: <TScene>(id: string) => request<Project<TScene>>(`/api/projects/${id}`),
+  getProject: (id: string) => request<Project>(`/api/projects/${id}`),
   saveScene: (id: string, scene: Record<string, unknown>) =>
     request<Project>(`/api/projects/${id}/scene`, {
       method: "PUT",

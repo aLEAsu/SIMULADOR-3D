@@ -29,10 +29,11 @@ export default function ElectronicsPage() {
     const existing = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
     if (existing) {
       api
-        .getProject<{ components: CircuitComponent[] }>(existing)
+        .getProject(existing)
         .then((p) => {
           setProject(p);
-          if (p.scene.components?.length) setComponents(p.scene.components);
+          const scene = p.scene as unknown as { components: CircuitComponent[] };
+          if (scene.components?.length) setComponents(scene.components);
           const typedRuns = p.runs as unknown as Run<CircuitResult>[];
           setRuns(typedRuns);
           if (typedRuns.length) setLastRun(typedRuns[typedRuns.length - 1]);

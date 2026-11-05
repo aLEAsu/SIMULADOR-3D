@@ -31,12 +31,13 @@ export default function AgriculturePage() {
     const existing = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
     if (existing) {
       api
-        .getProject<{ t_base: number; days: DailyWeather[]; thresholds: Thresholds }>(existing)
+        .getProject(existing)
         .then((p) => {
           setProject(p);
-          if (p.scene.t_base) setTBase(p.scene.t_base);
-          if (p.scene.days?.length) setDays(p.scene.days);
-          if (p.scene.thresholds) setThresholds(p.scene.thresholds);
+          const scene = p.scene as unknown as { t_base: number; days: DailyWeather[]; thresholds: Thresholds };
+          if (scene.t_base) setTBase(scene.t_base);
+          if (scene.days?.length) setDays(scene.days);
+          if (scene.thresholds) setThresholds(scene.thresholds);
           const typedRuns = p.runs as unknown as Run<GrowthResult>[];
           if (typedRuns.length) setLastRun(typedRuns[typedRuns.length - 1]);
         })

@@ -24,10 +24,10 @@ export default function RoboticsPage() {
     const existing = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
     if (existing) {
       api
-        .getProject<ArmScene>(existing)
+        .getProject(existing)
         .then((p) => {
           setProject(p);
-          if (p.scene && Object.keys(p.scene).length) setScene(p.scene);
+          if (p.scene && Object.keys(p.scene).length) setScene(p.scene as unknown as ArmScene);
           const typedRuns = p.runs as unknown as Run<ArmResult>[];
           if (typedRuns.length) setLastRun(typedRuns[typedRuns.length - 1]);
         })

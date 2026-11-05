@@ -43,8 +43,8 @@ Las demás entidades (cursos, rúbricas, publicaciones, IA) quedan en el modelo 
 - **Frontend:** Next.js + React + TypeScript + Tailwind. Canvas 2D (no 3D todavía) para el editor de protoboard — el 3D se reserva para cuando se aborde física/anatomía, donde sí aporta valor real.
 - **Backend:** FastAPI (Python) — porque el adaptador de electrónica llama a `ngspice` como proceso externo, y Python tiene bindings maduros para eso.
 - **Motor de electrónica:** `ngspice` invocado como subproceso aislado, con un traductor interno de "componentes de la escena" → netlist SPICE → resultados parseados de vuelta a `Result`/`Measurement`.
-- **Datos:** PostgreSQL para todo lo relacional; sin S3/MinIO todavía (no hay assets pesados en el MVP de electrónica — se añade cuando entre anatomía).
-- **Sin Docker todavía en este primer corte**: se corre local (Node + Python) para iterar rápido; Docker Compose se añade en la fase de "escalabilidad" cuando haya más de un servicio real que orquestar.
+- **Datos:** PostgreSQL para todo lo relacional (`apps/api/db.py`, vía `asyncpg`) — implementado desde Fase 7, dos tablas (`projects`, `runs`), sin S3/MinIO todavía (no hay assets pesados en ningún laboratorio actual — se añade cuando entre anatomía).
+- **Docker:** `docker-compose.yml` en la raíz orquesta `db` (Postgres 16), `api` y `web`. Implementado y verificado en Fase 7 (ver docs/02-roadmap.md). Para iterar rápido en desarrollo también se puede correr solo `docker compose up db` y levantar `api`/`web` localmente contra ese Postgres (ver README).
 
 ## 5. Por qué electrónica como primer laboratorio
 

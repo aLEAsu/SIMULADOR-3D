@@ -39,11 +39,12 @@ export default function NetworkingPage() {
     const existing = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
     if (existing) {
       api
-        .getProject<{ devices: Device[]; links: TopologyLink[] }>(existing)
+        .getProject(existing)
         .then((p) => {
           setProject(p);
-          if (p.scene.devices?.length) setDevices(p.scene.devices);
-          if (p.scene.links?.length) setLinks(p.scene.links);
+          const scene = p.scene as unknown as { devices: Device[]; links: TopologyLink[] };
+          if (scene.devices?.length) setDevices(scene.devices);
+          if (scene.links?.length) setLinks(scene.links);
           const typedRuns = p.runs as unknown as Run<TopologyResult>[];
           if (typedRuns.length) setLastRun(typedRuns[typedRuns.length - 1]);
         })
