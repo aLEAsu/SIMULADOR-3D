@@ -8,6 +8,7 @@
  * stays neutral grey, not a faked color.
  */
 import { useRef, useState } from "react";
+import { materialDefs } from "../lib/pieceMaterials";
 
 interface Props {
   volumeL: number;
@@ -15,6 +16,7 @@ interface Props {
   phAtVolume: number | null;
   onVolumeChange: (v: number) => void;
   onDragEnd: () => void;
+  energizing?: boolean;
 }
 
 const W = 220;
@@ -33,9 +35,10 @@ function phColor(ph: number): string {
   return "#a855f7";
 }
 
-export default function TitrationBench({ volumeL, rangeMaxL, phAtVolume, onVolumeChange, onDragEnd }: Props) {
+export default function TitrationBench({ volumeL, rangeMaxL, phAtVolume, onVolumeChange, onDragEnd, energizing }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [dragging, setDragging] = useState(false);
+  const { defs } = materialDefs("bench", "bench-shadow");
 
   const frac = Math.max(0, Math.min(1, volumeL / rangeMaxL));
   const handleY = TRACK_TOP + frac * (TRACK_BOTTOM - TRACK_TOP);
@@ -70,17 +73,32 @@ export default function TitrationBench({ volumeL, rangeMaxL, phAtVolume, onVolum
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", userSelect: "none" }}>
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width={W} height={H}>
-        <rect x={W / 2 - 10} y={10} width={20} height={TRACK_BOTTOM - 10} fill="#0b1220" stroke="var(--border)" />
-        <rect x={W / 2 - 9} y={10} width={18} height={(TRACK_BOTTOM - 10) * (1 - frac * 0.6)} fill="#60a5fa" opacity={0.5} />
+        {defs}
+        <defs>
+          <linearGradient id="bench-glass" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#1e293b" stopOpacity={0.5} />
+            <stop offset="15%" stopColor="#64748b" stopOpacity={0.35} />
+            <stop offset="30%" stopColor="#1e293b" stopOpacity={0.5} />
+            <stop offset="100%" stopColor="#1e293b" stopOpacity={0.6} />
+          </linearGradient>
+        </defs>
+        <g filter="url(#bench-shadow)">
+          <rect x={W / 2 - 10} y={10} width={20} height={TRACK_BOTTOM - 10} fill="url(#bench-glass)" stroke="var(--border)" />
+          <rect x={W / 2 - 9} y={10} width={18} height={(TRACK_BOTTOM - 10) * (1 - frac * 0.6)} fill="#60a5fa" opacity={0.5} />
+        </g>
         <line x1={W / 2 - 24} y1={handleY} x2={W / 2 + 24} y2={handleY} stroke="var(--lab-accent, var(--accent))" strokeWidth={6} strokeLinecap="round"
           style={{ cursor: "ns-resize" }} onPointerDown={handlePointerDown} />
         <circle cx={W / 2} cy={handleY} r={9} fill="var(--lab-accent, var(--accent))" style={{ cursor: "ns-resize" }} onPointerDown={handlePointerDown} />
-        <text x={W / 2 + 32} y={handleY + 4} fontSize={11} fill="var(--text)">{(volumeL * 1000).toFixed(2)} mL</text>
+        <text x={W / 2 + 32} y={handleY + 4} fontSize={11} fill="var(--text)" fontFamily="var(--font-mono)">{(volumeL * 1000).toFixed(2)} mL</text>
 
-        <path d={`M ${W / 2 - 34} 210 L ${W / 2 - 34} 260 L ${W / 2 - 58} 340 Q ${W / 2} 365 ${W / 2 + 58} 340 L ${W / 2 + 34} 260 L ${W / 2 + 34} 210 Z`}
-          fill="#0b1220" stroke="var(--border)" strokeWidth={2} />
-        <path d={`M ${W / 2 - 50} 330 Q ${W / 2} 352 ${W / 2 + 50} 330 L ${W / 2 + 58} 340 Q ${W / 2} 365 ${W / 2 - 58} 340 Z`}
-          fill={liquidColor} opacity={0.8} />
+        <g filter="url(#bench-shadow)" className={energizing ? "is-energizing" : undefined}>
+          <path d={`M ${W / 2 - 34} 210 L ${W / 2 - 34} 260 L ${W / 2 - 58} 340 Q ${W / 2} 365 ${W / 2 + 58} 340 L ${W / 2 + 34} 260 L ${W / 2 + 34} 210 Z`}
+            fill="url(#bench-glass)" stroke="var(--border)" strokeWidth={2} />
+          <path d={`M ${W / 2 - 50} 330 Q ${W / 2} 352 ${W / 2 + 50} 330 L ${W / 2 + 58} 340 Q ${W / 2} 365 ${W / 2 - 58} 340 Z`}
+            fill={liquidColor} opacity={0.8} />
+          {/* glass specular highlight */}
+          <path d={`M ${W / 2 - 28} 215 L ${W / 2 - 42} 255`} stroke="#fff" strokeOpacity={0.15} strokeWidth={4} strokeLinecap="round" />
+        </g>
         <line x1={W / 2} y1={180} x2={W / 2} y2={210} stroke="var(--border)" strokeWidth={2} />
       </svg>
       <p className="canvas-hint" style={{ textAlign: "center" }}>

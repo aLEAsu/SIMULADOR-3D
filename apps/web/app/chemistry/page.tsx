@@ -2,16 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Info } from "lucide-react";
 import { api, Project, Run } from "../lib/api";
 import { useCollaboration } from "../lib/useCollaboration";
 import PresenceBadge from "../lib/PresenceBadge";
 import TutorPanel from "../lib/TutorPanel";
+import ThemeToggle from "../lib/ThemeToggle";
+import RunConsole, { ReadoutItem } from "../lib/RunConsole";
+import OscilloscopeTrace from "../lib/OscilloscopeTrace";
 import { TitrationResult, TitrationScene } from "./types";
-import TitrationChart from "./TitrationChart";
 import TitrationBench from "./TitrationBench";
 
 const STORAGE_KEY = "usl-chemistry-project-id";
 const DISCIPLINE = "chemistry";
+const MIN_ENERGIZE_MS = 900;
 
 const DEFAULT_SCENE: TitrationScene = {
   analyte_type: "acid",
@@ -37,6 +41,8 @@ export default function ChemistryPage() {
   const [lastRun, setLastRun] = useState<Run<TitrationResult> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [energizing, setEnergizing] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const sceneRef = useRef(scene);
   sceneRef.current = scene;
 
@@ -76,17 +82,20 @@ export default function ChemistryPage() {
   async function saveAndRun(overrideScene?: TitrationScene) {
     setBusy(true);
     setError(null);
+    setEnergizing(true);
     try {
       const p = await ensureProject();
       const toSave = overrideScene ?? sceneRef.current;
       await api.saveScene(p.id, toSave as unknown as Record<string, unknown>);
-      const run = await api.runProject<TitrationResult>(p.id);
+      const minDelay = new Promise((resolve) => setTimeout(resolve, MIN_ENERGIZE_MS));
+      const [run] = await Promise.all([api.runProject<TitrationResult>(p.id), minDelay]);
       setLastRun(run);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setLastRun(null);
     } finally {
       setBusy(false);
+      setEnergizing(false);
     }
   }
 
@@ -101,19 +110,29 @@ export default function ChemistryPage() {
   return (
     <main className="lab-chemistry">
       <p><Link href="/">← Volver al catálogo</Link></p>
-      <h1>Laboratorio de Química <PresenceBadge connected={connected} count={connectedCount} /></h1>
-      <p className="subtitle">
-        Arrastrá la bureta para volcar titulante — ácido/base fuerte por balance de moles exacto, o ácido/base
-        <strong> débil</strong> por balance de carga resuelto numéricamente (Ka/Kb), adaptador{" "}
-        <span className="badge">chemistry-titration-strong v0.2.0</span> · nivel de fidelidad 3/5. Kw=1.0×10⁻¹⁴ a 25°C.
-      </p>
+      <div className="lab-topbar">
+        <h1>Laboratorio de Química <PresenceBadge connected={connected} count={connectedCount} /></h1>
+        <div className="row">
+          <button type="button" className="icon-btn" onClick={() => setInfoOpen((v) => !v)} title="Sobre este laboratorio">
+            <Info size={16} />
+          </button>
+          <ThemeToggle />
+        </div>
+      </div>
+      {infoOpen && (
+        <p className="subtitle info-popover">
+          Arrastrá la bureta para volcar titulante — ácido/base fuerte por balance de moles exacto, o ácido/base
+          <strong> débil</strong> por balance de carga resuelto numéricamente (Ka/Kb), adaptador{" "}
+          <span className="badge">chemistry-titration-strong v0.2.0</span> · nivel de fidelidad 3/5. Kw=1.0×10⁻¹⁴ a 25°C.
+        </p>
+      )}
 
-      <section className="panel">
-        <h3 style={{ marginTop: 0 }}>Mesa de titulación</h3>
+      <section className="lab-console">
         <TitrationBench
           volumeL={scene.max_titrant_volume}
           rangeMaxL={Math.max(0.1, scene.max_titrant_volume * 1.2)}
           phAtVolume={phAtVolume}
+          energizing={energizing}
           onVolumeChange={(v) => field("max_titrant_volume", v)}
           onDragEnd={() => saveAndRun()}
         />
@@ -154,7 +173,9 @@ export default function ChemistryPage() {
         </div>
 
         <div className="row" style={{ marginTop: 10 }}>
-          <button onClick={() => saveAndRun()} disabled={busy}>{busy ? "Calculando…" : "Guardar y ejecutar"}</button>
+          <button onClick={() => saveAndRun()} disabled={busy}>
+            {energizing ? "Energizando…" : busy ? "Calculando…" : "Guardar y ejecutar"}
+          </button>
         </div>
         {error && <p className="error">{error}</p>}
       </section>
@@ -163,21 +184,33 @@ export default function ChemistryPage() {
         <>
           <section className="panel">
             <h3 style={{ marginTop: 0 }}>Curva de titulación</h3>
-            <TitrationChart series={lastRun.result.series} equivalenceVolume={lastRun.result.equivalence_volume} />
+            <OscilloscopeTrace
+              points={lastRun.result.series.map((p) => ({ x: p.titrant_volume * 1000, y: p.ph }))}
+              thresholds={[{ label: "pH 7", value: 7, color: "#94a3b8" }]}
+              verticalMarkers={[{ label: `eq. = ${(lastRun.result.equivalence_volume * 1000).toFixed(2)} mL`, value: lastRun.result.equivalence_volume * 1000, color: "#f87171" }]}
+              yMax={14}
+              xStartLabel="0 mL"
+              xEndLabel={`${(Math.max(...lastRun.result.series.map((p) => p.titrant_volume)) * 1000).toFixed(0)} mL titulante`}
+            />
           </section>
           <section className="panel">
             <h3 style={{ marginTop: 0 }}>Punto de equivalencia</h3>
-            <p>
-              Volumen de titulante: <strong>{(lastRun.result.equivalence_volume * 1000).toFixed(3)} mL</strong>
-              {lastRun.result.equivalence_in_range ? "" : " (fuera del rango simulado)"}
-              {equivalencePoint && (
-                <> · pH calculado en ese punto: <strong>{equivalencePoint.ph.toFixed(2)}</strong>{" "}
-                  {isWeak
-                    ? "(no es 7.00: hidrólisis del par conjugado débil — esto es correcto, no un error)"
-                    : "(debe ser exactamente 7.00 para ácido-base fuerte)"}
-                </>
-              )}
-            </p>
+            <RunConsole
+              items={[
+                {
+                  id: "equivalence",
+                  label: "Volumen de titulante",
+                  value: lastRun.result.equivalence_volume * 1000,
+                  decimals: 3,
+                  unit: "mL",
+                  secondary: equivalencePoint
+                    ? `pH ${equivalencePoint.ph.toFixed(2)} ${isWeak ? "(hidrólisis del par conjugado débil — correcto, no un error)" : "(= 7.00 esperado)"}`
+                    : undefined,
+                  status: lastRun.result.equivalence_in_range ? "good" : "bad",
+                  statusLabel: lastRun.result.equivalence_in_range ? undefined : "fuera del rango simulado",
+                } satisfies ReadoutItem,
+              ]}
+            />
           </section>
         </>
       )}

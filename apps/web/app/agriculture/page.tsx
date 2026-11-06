@@ -2,17 +2,21 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Info } from "lucide-react";
 import { api, Project, Run } from "../lib/api";
 import { useCollaboration } from "../lib/useCollaboration";
 import PresenceBadge from "../lib/PresenceBadge";
 import TutorPanel from "../lib/TutorPanel";
+import ThemeToggle from "../lib/ThemeToggle";
 import InteractiveCanvas, { Piece } from "../lib/InteractiveCanvas";
+import RunConsole, { ReadoutItem } from "../lib/RunConsole";
+import OscilloscopeTrace from "../lib/OscilloscopeTrace";
 import { GrowthResult, GrowthScene, Plot, PlotResult } from "./types";
 import { PIECE_TYPES, SPECIES_REFERENCE, defaultPlot, makeDays, nextPlotId } from "./canvasAdapter";
-import GrowthChart from "./GrowthChart";
 
 const STORAGE_KEY = "usl-agriculture-project-id";
 const DISCIPLINE = "agriculture";
+const MIN_ENERGIZE_MS = 900;
 
 const SAMPLE_LAYOUT: Record<string, { x: number; y: number }> = { parcela1: { x: 120, y: 100 } };
 
@@ -24,6 +28,8 @@ export default function AgriculturePage() {
   const [lastRun, setLastRun] = useState<Run<GrowthResult> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [energizing, setEnergizing] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   function loadScene(scene: GrowthScene) {
     if (scene.plots?.length) setPlots(scene.plots);
@@ -85,17 +91,20 @@ export default function AgriculturePage() {
   async function saveAndRun() {
     setBusy(true);
     setError(null);
+    setEnergizing(true);
     try {
       const p = await ensureProject();
       const scene: GrowthScene = { plots, layout };
       await api.saveScene(p.id, scene as unknown as Record<string, unknown>);
-      const run = await api.runProject<GrowthResult>(p.id);
+      const minDelay = new Promise((resolve) => setTimeout(resolve, MIN_ENERGIZE_MS));
+      const [run] = await Promise.all([api.runProject<GrowthResult>(p.id), minDelay]);
       setLastRun(run);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setLastRun(null);
     } finally {
       setBusy(false);
+      setEnergizing(false);
     }
   }
 
@@ -118,33 +127,61 @@ export default function AgriculturePage() {
       uid: p.label, type: "plot", x: layout[p.label]?.x ?? 100, y: layout[p.label]?.y ?? 100,
       state: p.label === selectedId ? "selected" : "default",
       badge: r ? `${r.current_stage} · ${r.total_gdd.toFixed(0)} GDD` : undefined,
-    };
+      stage: r?.current_stage,
+    } as Piece;
   });
+
+  const stageItems: ReadoutItem[] = selectedResult
+    ? [
+        { id: "germination", label: "Germinación", value: selectedResult.stage_reached_on_day.germination ?? 0, decimals: 0, unit: "día", status: selectedResult.stage_reached_on_day.germination != null ? "good" : "neutral", noReading: selectedResult.stage_reached_on_day.germination == null },
+        { id: "flowering", label: "Floración", value: selectedResult.stage_reached_on_day.flowering ?? 0, decimals: 0, unit: "día", status: selectedResult.stage_reached_on_day.flowering != null ? "good" : "neutral", noReading: selectedResult.stage_reached_on_day.flowering == null },
+        { id: "maturity", label: "Madurez", value: selectedResult.stage_reached_on_day.maturity ?? 0, decimals: 0, unit: "día", status: selectedResult.stage_reached_on_day.maturity != null ? "good" : "neutral", noReading: selectedResult.stage_reached_on_day.maturity == null },
+      ]
+    : [];
+
+  const plotCompareItems: ReadoutItem[] = resultPlots.map((p) => ({
+    id: p.label,
+    label: p.label,
+    value: p.total_gdd,
+    decimals: 1,
+    unit: "GDD",
+    status: "good",
+    statusLabel: p.current_stage,
+  }));
 
   return (
     <main className="lab-agriculture">
       <p><Link href="/">← Volver al catálogo</Link></p>
-      <h1>Laboratorio de Naturaleza y Agricultura <PresenceBadge connected={connected} count={connectedCount} /></h1>
-      <p className="subtitle">
-        Arrastrá parcelas al campo y simulá cada una por separado con el modelo real de grados-día de
-        crecimiento (GDD), adaptador <span className="badge">agriculture-gdd v0.2.0</span> · nivel de
-        fidelidad 2/5.
-      </p>
-      <p className="subtitle" style={{ color: "var(--bad)" }}>
-        Importante: la temperatura base y los umbrales de etapa son parámetros que vos ingresás (o presets de
-        referencia sin verificar), no datos confirmados por especie. Si vas a usar esto para una especie real,
-        verificá los umbrales con una fuente agronómica (INTA, extensión universitaria, etc.) antes de confiar
-        en el resultado.
-      </p>
+      <div className="lab-topbar">
+        <h1>Laboratorio de Naturaleza y Agricultura <PresenceBadge connected={connected} count={connectedCount} /></h1>
+        <div className="row">
+          <button type="button" className="icon-btn" onClick={() => setInfoOpen((v) => !v)} title="Sobre este laboratorio">
+            <Info size={16} />
+          </button>
+          <ThemeToggle />
+        </div>
+      </div>
+      {infoOpen && (
+        <p className="subtitle info-popover">
+          Arrastrá parcelas al campo y simulá cada una por separado con el modelo real de grados-día de
+          crecimiento (GDD), adaptador <span className="badge">agriculture-gdd v0.2.0</span> · nivel de
+          fidelidad 2/5. Importante: la temperatura base y los umbrales de etapa son parámetros que vos
+          ingresás (o presets de referencia sin verificar), no datos confirmados por especie. Si vas a usar
+          esto para una especie real, verificá los umbrales con una fuente agronómica (INTA, extensión
+          universitaria, etc.) antes de confiar en el resultado.
+        </p>
+      )}
 
-      <section className="panel">
-        <h3 style={{ marginTop: 0 }}>Campo ({plots.length} parcela{plots.length !== 1 ? "s" : ""})</h3>
+      <section className="lab-console">
         <InteractiveCanvas
           pieceTypes={PIECE_TYPES}
           pieces={pieces}
           links={[]}
           allowLinks={false}
           selectedUid={selectedId}
+          gridStyle="field"
+          paletteDocked
+          energizing={energizing}
           onPlace={placePlot}
           onMove={movePlot}
           onSelect={setSelectedId}
@@ -192,7 +229,9 @@ export default function AgriculturePage() {
         )}
 
         <div className="row" style={{ marginTop: 10 }}>
-          <button onClick={saveAndRun} disabled={busy}>{busy ? "Ejecutando…" : "Guardar y ejecutar"}</button>
+          <button onClick={saveAndRun} disabled={busy}>
+            {energizing ? "Energizando…" : busy ? "Ejecutando…" : "Guardar y ejecutar"}
+          </button>
         </div>
         {error && <p className="error">{error}</p>}
       </section>
@@ -201,19 +240,21 @@ export default function AgriculturePage() {
         <>
           <section className="panel">
             <h3 style={{ marginTop: 0 }}>Acumulación de GDD — {selected.label}</h3>
-            <GrowthChart series={selectedResult.series} thresholds={selected.thresholds} />
+            <OscilloscopeTrace
+              points={selectedResult.series.map((s) => ({ x: s.day, y: s.gdd_accumulated }))}
+              thresholds={[
+                { label: "Germinación", value: selected.thresholds.germination, color: "#4ade80" },
+                { label: "Floración", value: selected.thresholds.flowering, color: "#fbbf24" },
+                { label: "Madurez", value: selected.thresholds.maturity, color: "#f87171" },
+              ]}
+              xStartLabel="día 1"
+              xEndLabel={`día ${selectedResult.series[selectedResult.series.length - 1]?.day ?? ""}`}
+            />
           </section>
           <section className="panel">
             <h3 style={{ marginTop: 0 }}>Resultado — {selected.label}</h3>
             <p>Estado actual: <strong>{selectedResult.current_stage}</strong> · GDD total acumulado: {selectedResult.total_gdd.toFixed(1)}</p>
-            <table>
-              <thead><tr><th>Etapa</th><th>Día en que se alcanzó</th></tr></thead>
-              <tbody>
-                <tr><td>Germinación</td><td>{selectedResult.stage_reached_on_day.germination ?? "no alcanzada"}</td></tr>
-                <tr><td>Floración</td><td>{selectedResult.stage_reached_on_day.flowering ?? "no alcanzada"}</td></tr>
-                <tr><td>Madurez</td><td>{selectedResult.stage_reached_on_day.maturity ?? "no alcanzada"}</td></tr>
-              </tbody>
-            </table>
+            <RunConsole items={stageItems} />
           </section>
         </>
       )}
@@ -221,14 +262,7 @@ export default function AgriculturePage() {
       {resultPlots.length > 1 && (
         <section className="panel">
           <h3 style={{ marginTop: 0 }}>Comparación de parcelas</h3>
-          <table>
-            <thead><tr><th>Parcela</th><th>Estado</th><th>GDD total</th></tr></thead>
-            <tbody>
-              {resultPlots.map((p) => (
-                <tr key={p.label}><td>{p.label}</td><td>{p.current_stage}</td><td>{p.total_gdd.toFixed(1)}</td></tr>
-              ))}
-            </tbody>
-          </table>
+          <RunConsole items={plotCompareItems} />
         </section>
       )}
 

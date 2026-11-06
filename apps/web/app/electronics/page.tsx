@@ -2,11 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Info } from "lucide-react";
 import { api, Project, Run } from "../lib/api";
 import { useCollaboration } from "../lib/useCollaboration";
 import PresenceBadge from "../lib/PresenceBadge";
 import TutorPanel from "../lib/TutorPanel";
+import ThemeToggle from "../lib/ThemeToggle";
 import InteractiveCanvas, { CanvasLink, Piece } from "../lib/InteractiveCanvas";
+import RunConsole, { ReadoutItem } from "../lib/RunConsole";
+import RunFilmstrip, { FilmstripRun } from "../lib/RunFilmstrip";
 import { CircuitComponent, CircuitResult, CircuitScene } from "./types";
 import {
   PIECE_TYPES, GROUND_PIECE_TYPE, defaultProps,
@@ -15,6 +19,11 @@ import {
 
 const STORAGE_KEY = "usl-electronics-project-id";
 const DISCIPLINE = "electronics";
+// The console plays its "energizing" pulse for at least this long so the
+// transition is actually visible even when the real backend answers in a
+// few milliseconds — purely cosmetic pacing, the number shown afterwards
+// is always exactly what the solver returned, never anything from this delay.
+const MIN_ENERGIZE_MS = 900;
 
 const SAMPLE_SCENE: CircuitScene = {
   components: [
@@ -47,6 +56,8 @@ export default function ElectronicsPage() {
   const [runs, setRuns] = useState<Run<CircuitResult>[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [energizing, setEnergizing] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   function loadScene(scene: CircuitScene) {
     const { pieces: p, wires: w } = canvasFromScene(scene);
@@ -132,11 +143,13 @@ export default function ElectronicsPage() {
   async function saveAndRun() {
     setBusy(true);
     setError(null);
+    setEnergizing(true);
     try {
       const p = await ensureProject();
       const scene = sceneFromCanvas(pieces, wires);
       await api.saveScene(p.id, scene as unknown as Record<string, unknown>);
-      const run = await api.runProject<CircuitResult>(p.id);
+      const minDelay = new Promise((resolve) => setTimeout(resolve, MIN_ENERGIZE_MS));
+      const [run] = await Promise.all([api.runProject<CircuitResult>(p.id), minDelay]);
       setLastRun(run);
       const allRuns = await api.listRuns<CircuitResult>(p.id);
       setRuns(allRuns);
@@ -145,6 +158,7 @@ export default function ElectronicsPage() {
       setLastRun(null);
     } finally {
       setBusy(false);
+      setEnergizing(false);
     }
   }
 
@@ -173,23 +187,54 @@ export default function ElectronicsPage() {
 
   const canvasLinks: CanvasLink[] = wires.map((w) => ({ ...w }));
 
-  return (
-    <main className="lab-electronics">
-      <p><Link href="/">← Volver al catálogo</Link></p>
-      <h1>Laboratorio de Electrónica <PresenceBadge connected={connected} count={connectedCount} /></h1>
-      <p className="subtitle">
-        Protoboard interactivo real: arrastrá piezas, conectalas entre terminales y ejecutá el análisis nodal DC
-        (NumPy), adaptador <span className="badge">electronics-dc v0.2.0</span> · nivel de fidelidad 3/5.
-        No es una animación: cambiá un valor o la posición de un cable y volvé a ejecutar para comprobarlo.
-      </p>
+  const readoutItems: ReadoutItem[] = (lastRun?.result.components ?? []).map((r) => ({
+    id: r.id,
+    label: `${r.id} · ${r.type}`,
+    value: r.voltage,
+    decimals: 3,
+    unit: "V",
+    secondary: `${(r.current * 1000).toFixed(2)} mA · ${(r.power * 1000).toFixed(2)} mW`,
+    status: r.type === "led" ? (r.on ? "good" : "neutral") : "good",
+    statusLabel:
+      r.type === "led" ? (r.on ? "encendido" : "apagado") : r.type === "switch" ? (r.closed ? "cerrado" : "abierto") : undefined,
+  }));
 
-      <section className="panel">
-        <h3 style={{ marginTop: 0 }}>Protoboard</h3>
+  const filmstripRuns: FilmstripRun[] = runs.map((r, i) => ({
+    id: r.id,
+    index: i + 1,
+    changedSummary: (r.scene as unknown as CircuitScene).components.map((c) => `${c.id}=${c.value}`).join(", "),
+    readoutSummary: Object.entries(r.result.node_voltages).map(([n, v]) => `${n}=${v.toFixed(2)}V`).join(", "),
+  }));
+
+  return (
+    <main className="lab-electronics lab-console-page">
+      <p><Link href="/">← Volver al catálogo</Link></p>
+      <div className="lab-topbar">
+        <h1>Laboratorio de Electrónica <PresenceBadge connected={connected} count={connectedCount} /></h1>
+        <div className="row">
+          <button type="button" className="icon-btn" onClick={() => setInfoOpen((v) => !v)} title="Sobre este laboratorio">
+            <Info size={16} />
+          </button>
+          <ThemeToggle />
+        </div>
+      </div>
+      {infoOpen && (
+        <p className="subtitle info-popover">
+          Protoboard interactivo real: arrastrá piezas, conectalas entre terminales y ejecutá el análisis nodal DC
+          (NumPy), adaptador <span className="badge">electronics-dc v0.2.0</span> · nivel de fidelidad 3/5.
+          No es una animación: cambiá un valor o la posición de un cable y volvé a ejecutar para comprobarlo.
+        </p>
+      )}
+
+      <section className="lab-console">
         <InteractiveCanvas
           pieceTypes={[...PIECE_TYPES, GROUND_PIECE_TYPE]}
           pieces={renderPieces}
           links={canvasLinks}
           selectedUid={selectedUid}
+          gridStyle="breadboard"
+          paletteDocked
+          energizing={energizing}
           onPlace={placePiece}
           onMove={movePiece}
           onRotate={rotatePiece}
@@ -237,47 +282,22 @@ export default function ElectronicsPage() {
         )}
 
         <div className="row" style={{ marginTop: 10 }}>
-          <button onClick={saveAndRun} disabled={busy}>{busy ? "Ejecutando…" : "Guardar y ejecutar"}</button>
+          <button onClick={saveAndRun} disabled={busy}>
+            {energizing ? "Energizando…" : busy ? "Ejecutando…" : "Guardar y ejecutar"}
+          </button>
         </div>
         {error && <p className="error">{error}</p>}
       </section>
 
-      {lastRun && (
-        <section className="panel">
-          <h3 style={{ marginTop: 0 }}>Resultados (última corrida)</h3>
-          <table>
-            <thead><tr><th>Componente</th><th>Tipo</th><th>Voltaje</th><th>Corriente</th><th>Potencia</th><th>Estado</th></tr></thead>
-            <tbody>
-              {lastRun.result.components.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.id}</td>
-                  <td>{r.type}</td>
-                  <td>{r.voltage.toFixed(3)} V</td>
-                  <td>{(r.current * 1000).toFixed(2)} mA</td>
-                  <td>{(r.power * 1000).toFixed(2)} mW</td>
-                  <td>{r.type === "led" ? (r.on ? "encendido" : "apagado") : r.type === "switch" ? (r.closed ? "cerrado" : "abierto") : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      )}
+      <section className="panel">
+        <h3 style={{ marginTop: 0 }}>Lecturas (última corrida)</h3>
+        <RunConsole items={readoutItems} />
+      </section>
 
-      {runs.length > 1 && (
+      {filmstripRuns.length > 1 && (
         <section className="panel">
-          <h3 style={{ marginTop: 0 }}>Comparación de corridas ({runs.length})</h3>
-          <table>
-            <thead><tr><th>#</th><th>Componentes modificados</th><th>Voltajes de nodo</th></tr></thead>
-            <tbody>
-              {runs.map((r, i) => (
-                <tr key={r.id}>
-                  <td>{i + 1}</td>
-                  <td>{(r.scene as unknown as CircuitScene).components.map((c) => `${c.id}=${c.value}`).join(", ")}</td>
-                  <td>{Object.entries(r.result.node_voltages).map(([n, v]) => `${n}=${v.toFixed(2)}V`).join(", ")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <h3 style={{ marginTop: 0 }}>Comparación de corridas ({filmstripRuns.length})</h3>
+          <RunFilmstrip runs={filmstripRuns} />
         </section>
       )}
 

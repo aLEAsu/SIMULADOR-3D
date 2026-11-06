@@ -2,16 +2,20 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Info } from "lucide-react";
 import { api, Project, Run } from "../lib/api";
 import { useCollaboration } from "../lib/useCollaboration";
 import PresenceBadge from "../lib/PresenceBadge";
 import TutorPanel from "../lib/TutorPanel";
+import ThemeToggle from "../lib/ThemeToggle";
 import InteractiveCanvas, { CanvasLink, Piece } from "../lib/InteractiveCanvas";
+import RunConsole, { ReadoutItem } from "../lib/RunConsole";
 import { Device, DeviceType, FirewallRule, LinkType, TopologyResult, TopologyScene } from "./types";
 import { PIECE_TYPES, defaultDevice, nextDeviceId } from "./canvasAdapter";
 
 const STORAGE_KEY = "usl-networking-project-id";
 const DISCIPLINE = "networking";
+const MIN_ENERGIZE_MS = 900;
 
 const SAMPLE_DEVICES: Device[] = [
   { id: "pc1", type: "pc", ip: "192.168.1.10", prefix: 24, vlan_id: 1 },
@@ -42,6 +46,8 @@ export default function NetworkingPage() {
   const [lastRun, setLastRun] = useState<Run<TopologyResult> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [energizing, setEnergizing] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   function loadScene(scene: TopologyScene) {
     if (scene.devices?.length) setDevices(scene.devices);
@@ -120,26 +126,24 @@ export default function NetworkingPage() {
   async function saveAndRun() {
     setBusy(true);
     setError(null);
+    setEnergizing(true);
     try {
       const p = await ensureProject();
       const scene: TopologyScene = { devices, links, layout };
       await api.saveScene(p.id, scene as unknown as Record<string, unknown>);
-      const run = await api.runProject<TopologyResult>(p.id);
+      const minDelay = new Promise((resolve) => setTimeout(resolve, MIN_ENERGIZE_MS));
+      const [run] = await Promise.all([api.runProject<TopologyResult>(p.id), minDelay]);
       setLastRun(run);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setLastRun(null);
     } finally {
       setBusy(false);
+      setEnergizing(false);
     }
   }
 
   const selected = devices.find((d) => d.id === selectedId);
-  const reachById = new Map<string, TopologyResult["reachability"][number]>();
-  (lastRun?.result.reachability ?? []).forEach((r) => {
-    reachById.set(`${r.a}::${r.b}`, r);
-    reachById.set(`${r.b}::${r.a}`, r);
-  });
 
   const pieces: Piece[] = devices.map((d) => ({
     uid: d.id, type: d.type, x: layout[d.id]?.x ?? 100, y: layout[d.id]?.y ?? 100,
@@ -151,25 +155,62 @@ export default function NetworkingPage() {
     label: l.link_type && l.link_type !== "copper" ? l.link_type : undefined,
   }));
 
+  const subnetItems: ReadoutItem[] = Object.entries(lastRun?.result.subnets ?? {})
+    .filter((entry): entry is [string, NonNullable<TopologyResult["subnets"][string]>] => !!entry[1])
+    .map(([id, s]) => ({
+      id,
+      label: id,
+      value: s.usable_hosts,
+      decimals: 0,
+      unit: "hosts",
+      secondary: `${s.network}/${s.prefix} · másc ${s.netmask} · bcast ${s.broadcast}`,
+      status: "good",
+      statusLabel: s.first_host && s.last_host ? `${s.first_host} – ${s.last_host}` : undefined,
+    }));
+
+  const reachItems: ReadoutItem[] = (lastRun?.result.reachability ?? []).map((r, i) => ({
+    id: `${r.a}-${r.b}-${i}`,
+    label: `${r.a} ↔ ${r.b}`,
+    value: r.hops ?? 0,
+    decimals: 0,
+    unit: "saltos",
+    secondary: r.reason,
+    status: r.l3_reachable ? "good" : "bad",
+    statusLabel: r.l3_reachable ? "alcanzable (L3)" : "no alcanzable",
+    noReading: r.hops === null,
+  }));
+
   return (
     <main className="lab-networking">
       <p><Link href="/">← Volver al catálogo</Link></p>
-      <h1>Laboratorio de Redes <PresenceBadge connected={connected} count={connectedCount} /></h1>
-      <p className="subtitle">
-        Arrastrá dispositivos al lienzo y conectalos para armar la topología. Subnetting IPv4 real
-        (<code>ipaddress</code> de Python), VLANs que realmente cambian qué enlaces conducen, y reglas de
-        firewall que realmente bloquean alcanzabilidad — adaptador{" "}
-        <span className="badge">networking-topology v0.2.0</span> · nivel de fidelidad 2/5. Simulador
-        conceptual de direccionamiento y topología, no una emulación de un SO de red real.
-      </p>
+      <div className="lab-topbar">
+        <h1>Laboratorio de Redes <PresenceBadge connected={connected} count={connectedCount} /></h1>
+        <div className="row">
+          <button type="button" className="icon-btn" onClick={() => setInfoOpen((v) => !v)} title="Sobre este laboratorio">
+            <Info size={16} />
+          </button>
+          <ThemeToggle />
+        </div>
+      </div>
+      {infoOpen && (
+        <p className="subtitle info-popover">
+          Arrastrá dispositivos al lienzo y conectalos para armar la topología. Subnetting IPv4 real
+          (<code>ipaddress</code> de Python), VLANs que realmente cambian qué enlaces conducen, y reglas de
+          firewall que realmente bloquean alcanzabilidad — adaptador{" "}
+          <span className="badge">networking-topology v0.2.0</span> · nivel de fidelidad 2/5. Simulador
+          conceptual de direccionamiento y topología, no una emulación de un SO de red real.
+        </p>
+      )}
 
-      <section className="panel">
-        <h3 style={{ marginTop: 0 }}>Topología</h3>
+      <section className="lab-console">
         <InteractiveCanvas
           pieceTypes={PIECE_TYPES}
           pieces={pieces}
           links={canvasLinks}
           selectedUid={selectedId}
+          gridStyle="rack"
+          paletteDocked
+          energizing={energizing}
           onPlace={placeDevice}
           onMove={moveDevice}
           onSelect={setSelectedId}
@@ -204,7 +245,9 @@ export default function NetworkingPage() {
         )}
 
         <div className="row" style={{ marginTop: 10 }}>
-          <button onClick={saveAndRun} disabled={busy}>{busy ? "Ejecutando…" : "Guardar y ejecutar"}</button>
+          <button onClick={saveAndRun} disabled={busy}>
+            {energizing ? "Energizando…" : busy ? "Ejecutando…" : "Guardar y ejecutar"}
+          </button>
         </div>
         {error && <p className="error">{error}</p>}
 
@@ -232,46 +275,15 @@ export default function NetworkingPage() {
         )}
       </section>
 
-      {lastRun && (
-        <>
-          <section className="panel">
-            <h3 style={{ marginTop: 0 }}>Información de subred por dispositivo</h3>
-            <table>
-              <thead><tr><th>Dispositivo</th><th>Red</th><th>Máscara</th><th>Broadcast</th><th>Hosts usables</th></tr></thead>
-              <tbody>
-                {Object.entries(lastRun.result.subnets).filter(([, s]) => s).map(([id, s]) => (
-                  <tr key={id}>
-                    <td>{id}</td>
-                    <td>{s!.network}/{s!.prefix}</td>
-                    <td>{s!.netmask}</td>
-                    <td>{s!.broadcast}</td>
-                    <td>{s!.usable_hosts} ({s!.first_host}–{s!.last_host})</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
+      <section className="panel">
+        <h3 style={{ marginTop: 0 }}>Subred por dispositivo</h3>
+        <RunConsole items={subnetItems} emptyLabel="Sin corrida todavía — armá la topología y ejecutá." />
+      </section>
 
-          <section className="panel">
-            <h3 style={{ marginTop: 0 }}>Alcanzabilidad</h3>
-            <table>
-              <thead><tr><th>Par</th><th>Enlace físico</th><th>Misma subred</th><th>Alcanzable (L3)</th><th>Saltos</th><th>Motivo</th></tr></thead>
-              <tbody>
-                {lastRun.result.reachability.map((r, i) => (
-                  <tr key={i}>
-                    <td>{r.a} ↔ {r.b}</td>
-                    <td>{r.physically_connected ? "sí" : "no"}</td>
-                    <td>{r.same_subnet ? "sí" : "no"}</td>
-                    <td style={{ color: r.l3_reachable ? "var(--good)" : "var(--bad)" }}>{r.l3_reachable ? "sí" : "no"}</td>
-                    <td>{r.hops ?? "—"}</td>
-                    <td>{r.reason}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        </>
-      )}
+      <section className="panel">
+        <h3 style={{ marginTop: 0 }}>Alcanzabilidad</h3>
+        <RunConsole items={reachItems} emptyLabel="Sin corrida todavía." />
+      </section>
 
       <TutorPanel projectId={project?.id ?? null} />
     </main>

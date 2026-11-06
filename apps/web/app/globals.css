@@ -1,84 +1,201 @@
+/* ---------------------------------------------------------------------
+ * Universal Science Lab — design tokens.
+ * Decisions + rationale: docs/03-design-system.md. Keep this file the
+ * single source of truth for color/type/motion — do not hardcode a hex
+ * value or a px size in a component when a token below already exists.
+ * ------------------------------------------------------------------- */
 :root {
-  --bg: #0f172a;
-  --panel: #1e293b;
-  --border: #334155;
+  /* Surfaces (3 levels: page / card / nested-card) — deep, near-black base
+   * so an instrument's own glow/material reads with real contrast, not a
+   * generic SaaS navy. */
+  --surface-0: #0a0e18;
+  --surface-1: #161d2c;
+  --surface-2: #212a3e;
+  --field-bg: #060a12;
+  --border: #2d3850;
+  --border-strong: #46597f;
+
+  /* Text */
   --text: #e2e8f0;
+  --text-strong: #f8fafc;
   --muted: #94a3b8;
+
+  /* Semantic accents */
   --accent: #38bdf8;
   --good: #4ade80;
   --bad: #f87171;
+  --warn: #fbbf24;
+
+  /* Back-compat aliases used by older rules below */
+  --bg: var(--surface-0);
+  --panel: var(--surface-1);
+
+  /* Type scale: size + weight + tracking, not just size */
+  --font-ui: var(--font-inter), -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-mono-jb), "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-base: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 25px;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --tracking-tight: -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.02em;
+  --tracking-wider: 0.06em;
+
+  /* Spacing + radius */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 420ms;
+}
+
+[data-theme="light"] {
+  --surface-0: #f1f5f9;
+  --surface-1: #ffffff;
+  --surface-2: #f8fafc;
+  --field-bg: #eef2f7;
+  --border: #cbd5e1;
+  --border-strong: #94a3b8;
+  --text: #0f172a;
+  --text-strong: #020617;
+  --muted: #5b6b82;
+  --accent: #0284c7;
+  --good: #16a34a;
+  --bad: #dc2626;
+  --warn: #b45309;
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--surface-0);
   color: var(--text);
-  font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+  transition: background var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
 }
 
 main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
 
-h1 { font-size: 20px; margin-bottom: 4px; }
-.subtitle { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+h1 {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-strong);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+}
+.subtitle { color: var(--muted); font-size: var(--fs-sm); line-height: 1.5; margin-bottom: 24px; }
 
 .panel {
-  background: var(--panel);
+  background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px;
-  margin-bottom: 20px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-5);
 }
 
-.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+
+/* Top-bar: lab title + theme toggle */
+.lab-topbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px;
+  background: var(--field-bg); border: 1px solid var(--border); color: var(--muted);
+  border-radius: var(--radius-sm); cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+}
+.icon-btn:hover { color: var(--text); border-color: var(--lab-accent, var(--accent)); }
 
 input, select {
-  background: #0b1220;
+  background: var(--field-bg);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 6px 8px;
-  font-size: 13px;
+  font-size: var(--fs-base);
+  font-family: var(--font-mono);
 }
 
 button {
   background: var(--accent);
-  color: #0b1220;
+  color: #04131f;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 7px 14px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-wide);
   cursor: pointer;
+  transition: filter var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+  display: inline-flex; align-items: center; gap: 6px;
 }
-button.secondary { background: var(--border); color: var(--text); }
+button:hover:not(:disabled) { filter: brightness(1.08); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: var(--fs-base); margin-top: var(--space-2); }
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
-th { color: var(--muted); font-weight: 500; }
+td.mono, td .mono { font-size: var(--fs-md); }
+th { color: var(--muted); font-weight: var(--fw-medium); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: var(--tracking-wider); }
 
-.error { color: var(--bad); font-size: 13px; margin-top: 8px; }
+.error {
+  color: var(--bad);
+  font-size: var(--fs-sm);
+  margin-top: var(--space-2);
+  display: flex; align-items: center; gap: 6px;
+  animation: usl-shake var(--dur-slow) var(--ease-standard);
+}
 .badge {
-  display: inline-block;
-  font-size: 11px;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
   padding: 2px 8px;
   border-radius: 999px;
-  background: #0b1220;
+  background: var(--field-bg);
   color: var(--muted);
   border: 1px solid var(--border);
 }
 
 /* Per-lab accent, set by a wrapper class on <main> in each lab page.
    Falls back to the global --accent when a lab doesn't set one. */
-.lab-electronics { --lab-accent: #38bdf8; }
-.lab-robotics { --lab-accent: #f472b6; }
-.lab-physics { --lab-accent: #a78bfa; }
-.lab-networking { --lab-accent: #34d399; }
-.lab-agriculture { --lab-accent: #a3e635; }
-.lab-chemistry { --lab-accent: #fb923c; }
-.lab-anatomy { --lab-accent: #fbbf24; }
+.lab-electronics { --lab-accent: #38bdf8; --lab-accent-soft: color-mix(in srgb, #38bdf8 16%, transparent); }
+.lab-robotics { --lab-accent: #f472b6; --lab-accent-soft: color-mix(in srgb, #f472b6 16%, transparent); }
+.lab-physics { --lab-accent: #a78bfa; --lab-accent-soft: color-mix(in srgb, #a78bfa 16%, transparent); }
+.lab-networking { --lab-accent: #34d399; --lab-accent-soft: color-mix(in srgb, #34d399 16%, transparent); }
+.lab-agriculture { --lab-accent: #a3e635; --lab-accent-soft: color-mix(in srgb, #a3e635 16%, transparent); }
+.lab-chemistry { --lab-accent: #fb923c; --lab-accent-soft: color-mix(in srgb, #fb923c 16%, transparent); }
+.lab-anatomy { --lab-accent: #fbbf24; --lab-accent-soft: color-mix(in srgb, #fbbf24 16%, transparent); }
 h1 { color: var(--text); }
 main[class^="lab-"] h1::before,
 main[class*=" lab-"] h1::before {
@@ -88,6 +205,7 @@ main[class*=" lab-"] h1::before {
   border-radius: 999px;
   background: var(--lab-accent, var(--accent));
   margin-right: 8px;
+  box-shadow: 0 0 0 4px var(--lab-accent-soft, transparent);
 }
 
 /* InteractiveCanvas */
@@ -97,45 +215,258 @@ main[class*=" lab-"] h1::before {
 main[class^="lab-"], main[class*=" lab-"] { user-select: none; -webkit-user-select: none; }
 .canvas-shell { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
 .canvas-palette {
-  display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px;
+  display: flex; flex-direction: row; flex-wrap: wrap; gap: var(--space-2);
   width: 100%;
 }
 .palette-piece {
   display: flex; align-items: center; gap: 6px;
-  background: #0b1220; border: 1.5px solid var(--border);
-  border-radius: 8px; padding: 6px 10px; font-size: 12px;
+  background: var(--field-bg); border: 1.5px solid var(--border);
+  border-radius: var(--radius-md); padding: 6px 10px; font-size: var(--fs-sm);
   cursor: grab; user-select: none;
-  transition: transform 0.12s ease, border-color 0.12s ease;
+  transition: transform var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard);
 }
-.palette-piece:hover { transform: translateY(-1px); border-color: var(--lab-accent, var(--accent)); }
+.palette-piece:hover { transform: translateY(-1px); border-color: var(--lab-accent, var(--accent)); box-shadow: 0 0 0 3px var(--lab-accent-soft, transparent); }
 .palette-piece:active { cursor: grabbing; }
 .palette-glyph { font-size: 15px; }
-.palette-label { color: var(--text); }
+.palette-label { color: var(--text); font-weight: var(--fw-medium); }
 
 .canvas-surface {
-  background: #0b1220;
+  background: var(--field-bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   width: 100%;
   touch-action: none;
 }
-.canvas-piece { transition: filter 0.12s ease; }
+.canvas-piece { transition: filter var(--dur-fast) var(--ease-standard); }
 .canvas-piece:hover rect { filter: brightness(1.15); }
 .canvas-piece.is-selected rect { filter: drop-shadow(0 0 6px var(--lab-accent, var(--accent))); }
+.canvas-piece.is-good { animation: usl-pulse var(--dur-slow) var(--ease-standard); }
 .canvas-link { cursor: pointer; }
 .canvas-link:hover line { filter: brightness(1.4); }
-.canvas-hint { color: var(--muted); font-size: 11px; margin: 8px 0 0; width: 100%; }
+.canvas-hint { color: var(--muted); font-size: var(--fs-xs); margin: 8px 0 0; width: 100%; }
 
 .props-panel {
   margin-top: 12px; padding: 10px 12px;
-  background: #0b1220; border: 1px solid var(--lab-accent, var(--border));
-  border-radius: 8px;
+  background: var(--field-bg); border: 1px solid var(--lab-accent, var(--border));
+  border-radius: var(--radius-md);
   display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
-  font-size: 13px;
+  font-size: var(--fs-base);
 }
 .props-panel label { display: flex; align-items: center; gap: 6px; }
 .props-panel input[type="number"] { width: 80px; }
 .props-panel .unit { color: var(--muted); }
+
+/* ---------------------------------------------------------------------
+ * Instrument console shell: the canvas is the primary surface (no bordered
+ * card around it), chrome is a slim bar, the palette docks over the
+ * workbench instead of sitting in its own row. Opt-in per lab via the
+ * `.lab-console` wrapper + InteractiveCanvas's `paletteDocked`/`gridStyle`
+ * props — docs/03-design-system.md.
+ * ------------------------------------------------------------------- */
+.lab-console {
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(ellipse at top, var(--surface-2), var(--surface-0) 70%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-3);
+  margin-bottom: var(--space-5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 8px 24px -16px rgba(0, 0, 0, 0.6);
+}
+/* Matte grain so the console reads as a physical material, not a flat
+ * gradient — a tiled noise data-URI blended at low opacity. */
+.lab-console::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+.info-popover {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-top: -8px;
+  margin-bottom: var(--space-4) !important;
+}
+
+.canvas-shell-docked { position: relative; }
+.canvas-surface-wrap { position: relative; width: 100%; }
+.canvas-shell-docked .canvas-surface { border-radius: var(--radius-lg); }
+
+.canvas-toolbox {
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: var(--space-3);
+  background: color-mix(in srgb, var(--surface-1) 88%, transparent);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.canvas-toolbox.is-collapsed { gap: 0; }
+.canvas-toolbox .canvas-palette { gap: var(--space-2); }
+.toolbox-toggle {
+  align-self: flex-start;
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  padding: 2px 0;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.toolbox-toggle:hover { color: var(--text); filter: none; }
+
+/* A piece entering the canvas settles with a small overshoot instead of
+ * popping in — real DOM mount only (re-renders of an existing piece reuse
+ * the same node and don't replay this). */
+.canvas-piece { animation: usl-piece-in var(--dur-slow) var(--ease-standard); }
+@keyframes usl-piece-in {
+  0% { opacity: 0; transform: scale(0.75); }
+  70% { opacity: 1; transform: scale(1.06); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* "Energizing" transient: a pulse traveling along wires that are already
+ * really connected, plus every piece on the board glowing in rhythm —
+ * motion cue for "calculating", never a stand-in for a reading (the
+ * numbers that follow always come from the real Run). */
+.wire-pulse {
+  animation: usl-wire-pulse 0.45s linear infinite;
+  filter: drop-shadow(0 0 4px var(--lab-accent, var(--accent)));
+}
+@keyframes usl-wire-pulse {
+  to { stroke-dashoffset: -24; }
+}
+
+.canvas-piece.is-energizing {
+  animation: usl-piece-in var(--dur-slow) var(--ease-standard), usl-energize-glow 0.6s ease-in-out infinite;
+}
+/* Generic version for hand-built benches that don't go through
+ * InteractiveCanvas (e.g. chemistry/TitrationBench.tsx) — same glow, no
+ * piece-mount animation bundled in. */
+.is-energizing { animation: usl-energize-glow 0.6s ease-in-out infinite; }
+@keyframes usl-energize-glow {
+  0%, 100% { filter: drop-shadow(0 0 0 transparent) brightness(1); }
+  50% { filter: drop-shadow(0 0 7px var(--lab-accent, var(--accent))) brightness(1.18); }
+}
+
+/* Seven-segment instrument readout (SevenSegmentReadout.tsx) */
+.seven-seg { display: inline-flex; align-items: baseline; gap: 1px; }
+.seven-seg svg { filter: drop-shadow(0 0 3px currentColor); }
+.seven-seg-unit {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  margin-left: 6px;
+  align-self: center;
+}
+.seven-seg-blank {
+  font-family: var(--font-mono);
+  font-size: var(--fs-lg);
+  color: var(--border-strong);
+  letter-spacing: 0.2em;
+}
+
+/* Run console: one instrument card per component, replaces a results table */
+.run-console { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-3); }
+.run-console-empty {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  padding: var(--space-4);
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+}
+.readout-card {
+  background: var(--field-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.readout-card.readout-good { border-color: color-mix(in srgb, var(--good) 45%, var(--border)); }
+.readout-card.readout-bad { border-color: color-mix(in srgb, var(--bad) 45%, var(--border)); }
+.readout-card-head { display: flex; align-items: center; justify-content: space-between; }
+.readout-label { font-size: var(--fs-xs); color: var(--muted); text-transform: uppercase; letter-spacing: var(--tracking-wider); }
+.readout-light { width: 7px; height: 7px; border-radius: 999px; background: var(--border); }
+.readout-light-good { background: var(--good); box-shadow: 0 0 6px var(--good); }
+.readout-light-bad { background: var(--bad); box-shadow: 0 0 6px var(--bad); }
+.readout-secondary { color: var(--muted); font-size: var(--fs-xs); }
+.readout-status-label { font-size: var(--fs-xs); color: var(--text); font-weight: var(--fw-medium); }
+
+/* Run filmstrip: horizontal scroll of past runs, replaces a comparison table */
+.run-filmstrip { display: flex; gap: var(--space-3); overflow-x: auto; padding-bottom: var(--space-2); }
+.filmstrip-card {
+  flex: 0 0 auto;
+  min-width: 180px;
+  background: var(--field-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.filmstrip-index { color: var(--lab-accent, var(--accent)); font-weight: var(--fw-bold); font-size: var(--fs-md); }
+.filmstrip-changed { font-size: var(--fs-xs); color: var(--text); }
+.filmstrip-readout { font-size: var(--fs-xs); color: var(--muted); }
+
+/* Oscilloscope-style trace (OscilloscopeTrace.tsx) */
+.scope {
+  background: radial-gradient(ellipse at center, #071a12, #04100b 80%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.scope-empty {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  padding: var(--space-5);
+  text-align: center;
+}
+.scope-trace {
+  filter: drop-shadow(0 0 3px currentColor);
+  stroke-dasharray: 2400;
+  stroke-dashoffset: 2400;
+  animation: usl-scope-draw 900ms var(--ease-standard) forwards;
+}
+@keyframes usl-scope-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-piece, .wire-pulse, .scope-trace, .is-energizing { animation: none; stroke-dashoffset: 0; }
+}
+
+@keyframes usl-pulse {
+  0% { filter: drop-shadow(0 0 0 var(--good)); }
+  35% { filter: drop-shadow(0 0 10px var(--good)); }
+  100% { filter: drop-shadow(0 0 0 transparent); }
+}
+@keyframes usl-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-piece.is-good, .error { animation: none; }
+}
 
 @media (max-width: 640px) {
   main { padding: 16px 10px 48px; }

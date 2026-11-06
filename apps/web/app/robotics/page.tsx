@@ -2,15 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Info } from "lucide-react";
 import { api, Project, Run } from "../lib/api";
 import { useCollaboration } from "../lib/useCollaboration";
 import PresenceBadge from "../lib/PresenceBadge";
 import TutorPanel from "../lib/TutorPanel";
+import ThemeToggle from "../lib/ThemeToggle";
+import RunConsole, { ReadoutItem } from "../lib/RunConsole";
 import { ArmResult, ArmScene } from "./types";
 import ArmScene3D from "./ArmScene3D";
 
 const STORAGE_KEY = "usl-robotics-project-id";
 const DISCIPLINE = "robotics";
+const MIN_ENERGIZE_MS = 900;
 
 const DEFAULT_SCENE: ArmScene = { l1: 5, l2: 3, target_x: 4, target_y: 4, elbow: "up" };
 
@@ -20,6 +24,8 @@ export default function RoboticsPage() {
   const [lastRun, setLastRun] = useState<Run<ArmResult> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [energizing, setEnergizing] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const sceneRef = useRef(scene);
   sceneRef.current = scene;
 
@@ -71,16 +77,19 @@ export default function RoboticsPage() {
   async function saveAndRun(overrideScene?: ArmScene) {
     setBusy(true);
     setError(null);
+    setEnergizing(true);
     try {
       const p = await ensureProject();
       const toSave = overrideScene ?? sceneRef.current;
       await api.saveScene(p.id, toSave as unknown as Record<string, unknown>);
-      const run = await api.runProject<ArmResult>(p.id);
+      const minDelay = new Promise((resolve) => setTimeout(resolve, MIN_ENERGIZE_MS));
+      const [run] = await Promise.all([api.runProject<ArmResult>(p.id), minDelay]);
       setLastRun(run);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      setEnergizing(false);
     }
   }
 
@@ -89,16 +98,25 @@ export default function RoboticsPage() {
   return (
     <main className="lab-robotics">
       <p><Link href="/">← Volver al catálogo</Link></p>
-      <h1>Laboratorio de Robótica <PresenceBadge connected={connected} count={connectedCount} /></h1>
-      <p className="subtitle">
-        Brazo planar arrastrable en 3D: agarrá la esfera roja (objetivo) y soltala donde quieras — el adaptador
-        recalcula la cinemática inversa exacta (ley de cosenos, 2 eslabones; desacople posición/orientación, 3
-        eslabones), adaptador <span className="badge">robotics-arm2-kinematics v0.2.0</span> · nivel de
-        fidelidad 3/5. Sin dinámica (masas, torques, motores).
-      </p>
+      <div className="lab-topbar">
+        <h1>Laboratorio de Robótica <PresenceBadge connected={connected} count={connectedCount} /></h1>
+        <div className="row">
+          <button type="button" className="icon-btn" onClick={() => setInfoOpen((v) => !v)} title="Sobre este laboratorio">
+            <Info size={16} />
+          </button>
+          <ThemeToggle />
+        </div>
+      </div>
+      {infoOpen && (
+        <p className="subtitle info-popover">
+          Brazo planar arrastrable en 3D: agarrá la esfera roja (objetivo) y soltala donde quieras — el adaptador
+          recalcula la cinemática inversa exacta (ley de cosenos, 2 eslabones; desacople posición/orientación, 3
+          eslabones), adaptador <span className="badge">robotics-arm2-kinematics v0.2.0</span> · nivel de
+          fidelidad 3/5. Sin dinámica (masas, torques, motores).
+        </p>
+      )}
 
-      <section className="panel">
-        <h3 style={{ marginTop: 0 }}>Brazo</h3>
+      <section className="lab-console">
         <div className="row" style={{ marginBottom: 10 }}>
           <label>l1: <input type="number" value={scene.l1} onChange={(e) => field("l1", Number(e.target.value))} style={{ width: 60 }} /></label>
           <label>l2: <input type="number" value={scene.l2} onChange={(e) => field("l2", Number(e.target.value))} style={{ width: 60 }} /></label>
@@ -115,12 +133,15 @@ export default function RoboticsPage() {
           {has3 && (
             <label>l3: <input type="number" value={scene.l3 ?? 2} onChange={(e) => field("l3", Number(e.target.value))} style={{ width: 60 }} /></label>
           )}
-          <button onClick={() => saveAndRun()} disabled={busy}>{busy ? "Resolviendo…" : "Guardar y ejecutar"}</button>
+          <button onClick={() => saveAndRun()} disabled={busy}>
+            {energizing ? "Energizando…" : busy ? "Resolviendo…" : "Guardar y ejecutar"}
+          </button>
         </div>
 
         <ArmScene3D
           scene={scene}
           result={lastRun?.result ?? null}
+          energizing={energizing}
           onTargetDrag={moveTarget}
           onPhiDrag={(phiDeg) => field("target_phi_deg", phiDeg)}
           onDragEnd={() => saveAndRun()}
@@ -140,20 +161,24 @@ export default function RoboticsPage() {
       {lastRun && (
         <section className="panel">
           <h3 style={{ marginTop: 0 }}>Resultado</h3>
-          <table>
-            <tbody>
-              <tr><th>θ1</th><td>{lastRun.result.theta1_deg.toFixed(3)}°</td></tr>
-              <tr><th>θ2</th><td>{lastRun.result.theta2_deg.toFixed(3)}°</td></tr>
-              {lastRun.result.link_count === 3 && <tr><th>θ3</th><td>{lastRun.result.theta3_deg?.toFixed(3)}°</td></tr>}
-              <tr><th>Efector final (FK)</th><td>({lastRun.result.end_effector.x.toFixed(4)}, {lastRun.result.end_effector.y.toFixed(4)})</td></tr>
-              <tr><th>Objetivo</th><td>({lastRun.result.target.x.toFixed(4)}, {lastRun.result.target.y.toFixed(4)})</td></tr>
-              <tr><th>Error de verificación FK↔IK (posición)</th><td>{lastRun.result.fk_verification_error.toExponential(2)}</td></tr>
-              {lastRun.result.link_count === 3 && (
-                <tr><th>Error de verificación FK↔IK (orientación)</th><td>{lastRun.result.fk_orientation_error_deg?.toExponential(2)}°</td></tr>
-              )}
-              <tr><th>Espacio de trabajo (l1+l2)</th><td>r ∈ [{lastRun.result.workspace.r_min.toFixed(2)}, {lastRun.result.workspace.r_max.toFixed(2)}]</td></tr>
-            </tbody>
-          </table>
+          <RunConsole
+            items={[
+              { id: "theta1", label: "θ1", value: lastRun.result.theta1_deg, decimals: 3, unit: "°", status: "good" },
+              { id: "theta2", label: "θ2", value: lastRun.result.theta2_deg, decimals: 3, unit: "°", status: "good" },
+              ...(lastRun.result.link_count === 3
+                ? [{ id: "theta3", label: "θ3", value: lastRun.result.theta3_deg ?? 0, decimals: 3, unit: "°", status: "good" } satisfies ReadoutItem]
+                : []),
+            ]}
+          />
+          {/* Scientific-notation verification error doesn't belong on a fixed-decimal
+              instrument digit — kept as plain mono text instead of forcing it into one. */}
+          <p className="mono" style={{ fontSize: "var(--fs-xs)", color: "var(--muted)", marginTop: 10 }}>
+            Efector final (FK): ({lastRun.result.end_effector.x.toFixed(4)}, {lastRun.result.end_effector.y.toFixed(4)}) ·
+            {" "}Objetivo: ({lastRun.result.target.x.toFixed(4)}, {lastRun.result.target.y.toFixed(4)}) ·
+            {" "}Error FK↔IK (posición): {lastRun.result.fk_verification_error.toExponential(2)}
+            {lastRun.result.link_count === 3 && <> · Error FK↔IK (orientación): {lastRun.result.fk_orientation_error_deg?.toExponential(2)}°</>}
+            {" "}· Espacio de trabajo: r ∈ [{lastRun.result.workspace.r_min.toFixed(2)}, {lastRun.result.workspace.r_max.toFixed(2)}]
+          </p>
         </section>
       )}
 

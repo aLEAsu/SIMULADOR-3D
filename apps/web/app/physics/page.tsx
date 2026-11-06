@@ -2,16 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Info } from "lucide-react";
 import { api, Project, Run } from "../lib/api";
 import { useCollaboration } from "../lib/useCollaboration";
 import PresenceBadge from "../lib/PresenceBadge";
 import TutorPanel from "../lib/TutorPanel";
+import ThemeToggle from "../lib/ThemeToggle";
+import RunConsole from "../lib/RunConsole";
 import { PhysicsResult, PhysicsScene } from "./types";
 import { TrajectoryPlot, EnergyChart } from "./PhysicsCharts";
 import PhysicsScene3D from "./PhysicsScene3D";
 
 const STORAGE_KEY = "usl-physics-project-id";
 const DISCIPLINE = "physics";
+const MIN_ENERGIZE_MS = 900;
 
 const BASE: PhysicsScene = {
   mode: "point_mass", mass: 1, x0: 0, y0: 10, vx0: 0, vy0: 0,
@@ -40,6 +44,8 @@ export default function PhysicsPage() {
   const [lastRun, setLastRun] = useState<Run<PhysicsResult> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [energizing, setEnergizing] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const sceneRef = useRef(scene);
   sceneRef.current = scene;
 
@@ -79,17 +85,20 @@ export default function PhysicsPage() {
   async function saveAndRun(overrideScene?: PhysicsScene) {
     setBusy(true);
     setError(null);
+    setEnergizing(true);
     try {
       const p = await ensureProject();
       const toSave = overrideScene ?? sceneRef.current;
       await api.saveScene(p.id, toSave as unknown as Record<string, unknown>);
-      const run = await api.runProject<PhysicsResult>(p.id);
+      const minDelay = new Promise((resolve) => setTimeout(resolve, MIN_ENERGIZE_MS));
+      const [run] = await Promise.all([api.runProject<PhysicsResult>(p.id), minDelay]);
       setLastRun(run);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setLastRun(null);
     } finally {
       setBusy(false);
+      setEnergizing(false);
     }
   }
 
@@ -99,14 +108,24 @@ export default function PhysicsPage() {
   return (
     <main className="lab-physics">
       <p><Link href="/">← Volver al catálogo</Link></p>
-      <h1>Laboratorio de Física <PresenceBadge connected={connected} count={connectedCount} /></h1>
-      <p className="subtitle">
-        Integración numérica real RK4 (masa libre, péndulo no lineal, plano inclinado con fricción cinética),
-        adaptador <span className="badge">physics-mechanics-rk4 v0.2.0</span> · nivel de fidelidad 3/5. Agarrá la
-        masa (o el péndulo) en la escena 3D y soltala donde quieras.
-      </p>
+      <div className="lab-topbar">
+        <h1>Laboratorio de Física <PresenceBadge connected={connected} count={connectedCount} /></h1>
+        <div className="row">
+          <button type="button" className="icon-btn" onClick={() => setInfoOpen((v) => !v)} title="Sobre este laboratorio">
+            <Info size={16} />
+          </button>
+          <ThemeToggle />
+        </div>
+      </div>
+      {infoOpen && (
+        <p className="subtitle info-popover">
+          Integración numérica real RK4 (masa libre, péndulo no lineal, plano inclinado con fricción cinética),
+          adaptador <span className="badge">physics-mechanics-rk4 v0.2.0</span> · nivel de fidelidad 3/5. Agarrá la
+          masa (o el péndulo) en la escena 3D y soltala donde quieras.
+        </p>
+      )}
 
-      <section className="panel">
+      <section className="lab-console">
         <h3 style={{ marginTop: 0 }}>Presets</h3>
         <div className="row">
           {Object.keys(PRESETS).map((name) => (
@@ -121,12 +140,15 @@ export default function PhysicsPage() {
             <option value="pendulum">Péndulo simple</option>
             <option value="incline">Plano inclinado</option>
           </select>
-          <button onClick={() => saveAndRun()} disabled={busy}>{busy ? "Integrando…" : "Guardar y ejecutar"}</button>
+          <button onClick={() => saveAndRun()} disabled={busy}>
+            {energizing ? "Energizando…" : busy ? "Integrando…" : "Guardar y ejecutar"}
+          </button>
         </div>
 
         <PhysicsScene3D
           scene={scene}
           result={lastRun?.result ?? null}
+          energizing={energizing}
           onMassDrag={(x, y) => setScene((prev) => ({ ...prev, x0: x, y0: y }))}
           onAnchorDrag={(x, y) => setScene((prev) => ({ ...prev, spring_anchor_x: x, spring_anchor_y: y }))}
           onPendulumDrag={(thetaDeg) => field("pendulum_theta0_deg", thetaDeg)}
@@ -198,15 +220,25 @@ export default function PhysicsPage() {
           </section>
           <section className="panel">
             <h3 style={{ marginTop: 0 }}>Estado final (t = {last.t.toFixed(2)} s, {lastRun.result.steps} pasos RK4)</h3>
-            <table>
-              <tbody>
-                <tr><th>Posición</th><td>x={last.x.toFixed(4)} m, y={last.y.toFixed(4)} m</td></tr>
-                {scene.mode === "pendulum" && <tr><th>Ángulo</th><td>θ={last.theta_deg?.toFixed(3)}°, ω={last.omega_deg_s?.toFixed(3)}°/s</td></tr>}
-                {scene.mode === "incline" && <tr><th>A lo largo del plano</th><td>s={last.s?.toFixed(4)} m, v={last.v?.toFixed(4)} m/s</td></tr>}
-                <tr><th>Rapidez</th><td>{last.speed.toFixed(4)} m/s</td></tr>
-                <tr><th>Energía</th><td>cinética {last.kinetic_energy.toFixed(3)} J, potencial {last.potential_energy.toFixed(3)} J, total {last.total_energy.toFixed(3)} J</td></tr>
-              </tbody>
-            </table>
+            <RunConsole
+              items={[
+                { id: "speed", label: "Rapidez", value: last.speed, decimals: 4, unit: "m/s", status: "good" },
+                ...(scene.mode === "pendulum"
+                  ? [{ id: "theta", label: "Ángulo θ", value: last.theta_deg ?? 0, decimals: 3, unit: "°", status: "good" as const }]
+                  : []),
+                ...(scene.mode === "incline"
+                  ? [{ id: "s", label: "Distancia recorrida", value: last.s ?? 0, decimals: 4, unit: "m", status: "good" as const }]
+                  : []),
+                { id: "ke", label: "Energía cinética", value: last.kinetic_energy, decimals: 3, unit: "J", status: "good" },
+                { id: "pe", label: "Energía potencial", value: last.potential_energy, decimals: 3, unit: "J", status: "good" },
+                { id: "te", label: "Energía total", value: last.total_energy, decimals: 3, unit: "J", status: "good" },
+              ]}
+            />
+            <p className="mono" style={{ fontSize: "var(--fs-xs)", color: "var(--muted)", marginTop: 10 }}>
+              Posición: x={last.x.toFixed(4)} m, y={last.y.toFixed(4)} m
+              {scene.mode === "pendulum" && <> · ω={last.omega_deg_s?.toFixed(3)}°/s</>}
+              {scene.mode === "incline" && <> · v={last.v?.toFixed(4)} m/s</>}
+            </p>
           </section>
         </>
       )}
