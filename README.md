@@ -1,6 +1,12 @@
-# Universal Science Lab
+# Umbral — Observatorio de simulación científica
 
-Plataforma universal de laboratorios científicos virtuales. Ver [docs/00-discovery.md](docs/00-discovery.md) para la investigación y definición maestra, [docs/01-architecture.md](docs/01-architecture.md) para la arquitectura (núcleo universal + adaptadores de motor) y [docs/02-roadmap.md](docs/02-roadmap.md) para las fases y criterios de aceptación.
+**Lo invisible, hecho visible.** Laboratorios 3D en los que primero *predices*, después experimentas y luego enciendes la **lente** para ver el mecanismo oculto, calculado y no animado. Ver [docs/05-umbral-experiencia-3d.md](docs/05-umbral-experiencia-3d.md) para la visión, las decisiones y los límites.
+
+- `/` Observatorio 3D · `/anatomy` LAB·01 Anatomía multicapa · `/networking` LAB·02 Redes · `/robotics` LAB·03 Robótica con física Rapier.
+- Los motores de Redes y Robótica corren en el navegador (`apps/web/app/lib/engines`) y se verifican contra los solvers Python: `node tools/golden/run.ts` → 213/213.
+- Los laboratorios de Electrónica, Física, Química y Agrociencia siguen disponibles como "archivo clásico" y usan la API Python.
+
+Documentación histórica: [docs/00-discovery.md](docs/00-discovery.md), [docs/01-architecture.md](docs/01-architecture.md), [docs/02-roadmap.md](docs/02-roadmap.md), [docs/04-product-transformation.md](docs/04-product-transformation.md).
 
 ## Estado actual
 

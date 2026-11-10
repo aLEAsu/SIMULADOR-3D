@@ -1,66 +1,135 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { api, EngineMetadata } from "./lib/api";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import * as THREE from "three";
+import { ArrowUpRight, Eye, FlaskConical, Lightbulb, Microscope, Orbit, Sprout, Target } from "lucide-react";
+import { readJournal } from "./xp/Shell";
+import type { Monolith, Station } from "./xp/Observatory";
+import "./xp/xp.css";
 
-const LAB_LINKS: Record<string, { href: string; title: string }> = {
-  electronics: { href: "/electronics", title: "Electrónica" },
-  networking: { href: "/networking", title: "Redes" },
-  agriculture: { href: "/agriculture", title: "Naturaleza y Agricultura" },
-  physics: { href: "/physics", title: "Física" },
-  chemistry: { href: "/chemistry", title: "Química" },
-  robotics: { href: "/robotics", title: "Robótica" },
-};
+const Stage = dynamic(() => import("./xp/Stage"), { ssr: false });
+const Observatory = dynamic(() => import("./xp/Observatory"), { ssr: false });
 
-export default function HomePage() {
-  const [engines, setEngines] = useState<EngineMetadata[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+const STATIONS: (Station & { code: string; title: string; question: string; lens: string; method: string })[] = [
+  { id: "anatomy", href: "/anatomy", angle: -0.62, color: "#ff7a59", kind: "anatomy", code: "LAB·01", title: "Anatomía", question: "¿Dónde está el nervio ciático?", lens: "Rayos X sobre 4 sistemas reales y 3 000+ estructuras", method: "Atlas con procedencia · BodyParts3D" },
+  { id: "networking", href: "/networking", angle: 0, color: "#5ee7ff", kind: "network", code: "LAB·02", title: "Redes", question: "¿Llega el paquete?", lens: "Subredes como distritos; paquetes con sus cabeceras salto a salto", method: "Subnetting + grafo · verificado 1:1" },
+  { id: "robotics", href: "/robotics", angle: 0.62, color: "#ffb547", kind: "robot", code: "LAB·03", title: "Robótica", question: "¿Puede levantarlo?", lens: "Envolvente de trabajo, solución fantasma y torque en vivo", method: "IK exacta + física Rapier" },
+];
+
+const MONOLITHS: Monolith[] = [
+  { id: "electronics", href: "/electronics", label: "Electrónica", angle: -1.25, color: "#5df2a5" },
+  { id: "physics", href: "/physics", label: "Física", angle: -0.95, color: "#a78bfa" },
+  { id: "chemistry", href: "/chemistry", label: "Química", angle: 0.95, color: "#ff5d6c" },
+  { id: "agriculture", href: "/agriculture", label: "Agrociencia", angle: 1.25, color: "#c6f36a" },
+];
+const CLASSIC_ICON: Record<string, typeof Orbit> = { electronics: Lightbulb, physics: Orbit, chemistry: FlaskConical, agriculture: Sprout };
+
+export default function ObservatoryPage() {
+  const router = useRouter();
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [fly, setFly] = useState<THREE.Vector3 | null>(null);
+  const [stats, setStats] = useState({ preds: 0, hits: 0, missions: 0 });
 
   useEffect(() => {
-    api.listEngines().then(setEngines).catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  }, []);
+    const j = readJournal();
+    const preds = j.filter((e) => e.kind === "prediccion" && e.ok != null);
+    setStats({ preds: preds.length, hits: preds.filter((e) => e.ok).length, missions: j.filter((e) => e.kind === "mision").length });
+    STATIONS.forEach((s) => router.prefetch(s.href));
+  }, [router]);
+
+  function go(id: string) {
+    const s = STATIONS.find((x) => x.id === id);
+    if (!s || fly) return;
+    const p = new THREE.Vector3(Math.sin(s.angle) * 4.2, 0, -Math.cos(s.angle) * 4.2 + 2.2);
+    setFly(p);
+    setTimeout(() => router.push(s.href), 900);
+  }
+
+  const active = STATIONS.find((s) => s.id === hovered) ?? null;
 
   return (
-    <main>
-      <h1>Universal Science Lab</h1>
-      <p className="subtitle">
-        Núcleo universal + adaptadores de motor por disciplina. Ver docs/00-discovery.md, docs/01-architecture.md
-        y docs/02-roadmap.md en el repositorio para la investigación, arquitectura y estado real de cada fase.
-      </p>
+    <main className="xp obs">
+      <Stage camera={{ position: [0, 2.6, 8.6], fov: 42 }} fog={[9, 22]} bloom={1.15}>
+        <Observatory stations={STATIONS} monoliths={MONOLITHS} labels={Object.fromEntries(STATIONS.map((s) => [s.id, { code: s.code, title: s.title }]))}
+          hovered={hovered} onHover={setHovered} onSelect={(s) => go(s.id)} onSelectMonolith={(m) => router.push(m.href)} flyTo={fly} />
+      </Stage>
 
-      {error && (
-        <p className="error">
-          No se pudo conectar con la API en localhost:8000 ({error}). ¿Está corriendo <code>uvicorn main:app --reload --port 8000</code>?
-        </p>
-      )}
+      <div className="xp-hud" style={{ transition: "opacity .6s", opacity: fly ? 0 : 1 }}>
+        <header className="xp-topbar">
+          <span className="xp-chip"><span className="obs-mark" /> <b style={{ fontFamily: "var(--xp-display)", letterSpacing: ".18em", fontSize: 12 }}>UMBRAL</b></span>
+          <span className="xp-spacer" />
+          <span className="xp-chip xp-hide-sm xp-mono" style={{ fontSize: 11 }}>
+            <Target size={13} color="var(--xp-amber)" /> {stats.preds} predicciones · {stats.preds ? Math.round((stats.hits / stats.preds) * 100) : 0}% acierto · {stats.missions} misiones
+          </span>
+        </header>
 
-      <div className="row" style={{ alignItems: "stretch" }}>
-        {engines?.map((e) => {
-          const link = LAB_LINKS[e.discipline];
-          return (
-            <div key={e.name} className="panel" style={{ width: 300 }}>
-              <h3 style={{ marginTop: 0 }}>{link?.title ?? e.discipline}</h3>
-              <p style={{ fontSize: 13, color: "var(--muted)" }}>
-                Adaptador <span className="badge">{e.name} v{e.version}</span>
-              </p>
-              <p style={{ fontSize: 13 }}>{e.fidelity_label}</p>
-              <p style={{ fontSize: 12, color: "var(--muted)" }}>Nivel de fidelidad: {e.fidelity_level}/5</p>
-              {link && <Link href={link.href}><button>Entrar</button></Link>}
-            </div>
-          );
-        })}
+        <section className="obs-hero" aria-labelledby="obs-title">
+          <p className="xp-eyebrow"><i /> Observatorio de simulación científica</p>
+          <h1 id="obs-title">Lo invisible,<br /><em>hecho visible.</em></h1>
+          <p className="obs-lede">Antes de mirar, <b>predice</b>. Luego experimenta en 3D y enciende la <b style={{ color: "var(--xp-cyan)" }}>lente</b>: corriente de paquetes, envolventes de trabajo, sistemas bajo la piel. Todo lo que ves está calculado.</p>
+          <ol className="obs-loop" aria-label="Ciclo de aprendizaje">
+            {["Misión", "Predice", "Experimenta", "Revela", "Explica"].map((p, i) => <li key={p}><span>{String(i + 1).padStart(2, "0")}</span>{p}</li>)}
+          </ol>
+        </section>
 
-        <div className="panel" style={{ width: 300 }}>
-          <h3 style={{ marginTop: 0 }}>Anatomía</h3>
-          <p style={{ fontSize: 13, color: "var(--muted)" }}>
-            Visor 3D <span className="badge">sin motor de cálculo</span>
-          </p>
-          <p style={{ fontSize: 13 }}>jerárquico (modelo real derivado de BodyParts3D vía Z-Anatomy, CC BY-SA)</p>
-          <p style={{ fontSize: 12, color: "var(--muted)" }}>No aplica nivel de fidelidad (no es una simulación)</p>
-          <Link href="/anatomy"><button>Entrar</button></Link>
-        </div>
+        <nav className="obs-stations" aria-label="Laboratorios insignia">
+          {STATIONS.map((s) => (
+            <button key={s.id} type="button" className={`obs-card ${hovered === s.id ? "is-hot" : ""}`} style={{ "--c": s.color } as React.CSSProperties}
+              onMouseEnter={() => setHovered(s.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(s.id)} onBlur={() => setHovered(null)} onClick={() => go(s.id)}>
+              <span className="obs-card-code">{s.code}</span>
+              <span className="obs-card-title">{s.title} <ArrowUpRight size={15} /></span>
+              <span className="obs-card-q">{s.question}</span>
+            </button>
+          ))}
+        </nav>
+
+        {active && (
+          <aside className="obs-detail" key={active.id} style={{ "--c": active.color } as React.CSSProperties}>
+            <p className="xp-eyebrow"><Eye size={12} color={active.color} /> La lente revela</p>
+            <p className="xp-p">{active.lens}</p>
+            <p className="xp-p xp-small xp-muted xp-mono" style={{ marginTop: 6 }}>{active.method}</p>
+          </aside>
+        )}
+
+        <footer className="obs-classic">
+          <span className="xp-mono xp-small xp-muted"><Microscope size={12} /> ARCHIVO CLÁSICO</span>
+          {MONOLITHS.map((m) => { const I = CLASSIC_ICON[m.id]; return <Link key={m.id} href={m.href} className="obs-classic-link"><I size={13} color={m.color} /> {m.label}</Link>; })}
+        </footer>
       </div>
+
+      <style>{`
+        .obs-mark { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--xp-amber); box-shadow: 0 0 12px var(--xp-amber), inset 0 0 6px var(--xp-amber); }
+        .obs-hero { position: absolute; left: 40px; top: 96px; width: min(470px, calc(100vw - 32px)); pointer-events: none; animation: xp-in .9s var(--xp-ease) both; }
+        .obs-hero h1 { display: block; margin: 6px 0 14px; font-family: var(--xp-display); font-weight: 600; font-size: clamp(38px, 5.4vw, 68px); line-height: .98; letter-spacing: -.035em; color: var(--xp-strong); }
+        .obs-hero h1 em { display: inline-block; font-style: normal; background: linear-gradient(90deg, var(--xp-cyan), var(--xp-amber)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .obs-lede { margin: 0; font-size: 15px; line-height: 1.6; color: var(--xp-text); max-width: 430px; }
+        .obs-loop { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 0; padding: 0; }
+        .obs-loop li { display: inline-flex; gap: 6px; align-items: center; padding: 5px 10px; border: 1px solid var(--xp-line); border-radius: 999px; background: rgba(4,6,12,.55); font-size: 11.5px; }
+        .obs-loop li span { font-family: var(--xp-mono); font-size: 10px; color: var(--xp-amber); }
+        .obs-stations { position: absolute; left: 50%; bottom: 64px; left: auto; right: 40px; transform: none; display: grid; grid-template-columns: repeat(3, minmax(0, 230px)); gap: 10px; animation: xp-in .9s .15s var(--xp-ease) both; }
+        .obs-card { text-align: left; display: grid; gap: 4px; padding: 14px 16px; border-radius: 14px; cursor: pointer; border: 1px solid var(--xp-line); background: var(--xp-glass); backdrop-filter: blur(16px); transition: all .3s var(--xp-ease); }
+        .obs-card:hover, .obs-card.is-hot { border-color: var(--c); box-shadow: 0 0 0 1px var(--c), 0 18px 50px rgba(0,0,0,.5), 0 0 40px color-mix(in srgb, var(--c) 25%, transparent); transform: translateY(-3px); }
+        .obs-card-code { font-family: var(--xp-mono); font-size: 10px; letter-spacing: .14em; color: var(--c); }
+        .obs-card-title { display: flex; justify-content: space-between; align-items: center; font-family: var(--xp-display); font-size: 19px; font-weight: 600; color: var(--xp-strong); }
+        .obs-card-q { color: var(--xp-muted); font-size: 12.5px; }
+        .obs-detail { position: absolute; right: 40px; top: 110px; width: 280px; padding: 14px 16px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); background: var(--xp-glass); backdrop-filter: blur(16px); animation: xp-in .35s var(--xp-ease) both; }
+        .obs-classic { position: absolute; right: 40px; bottom: 20px; display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+        .obs-classic-link { display: inline-flex; align-items: center; gap: 6px; color: var(--xp-muted); text-decoration: none; font-size: 12px; padding: 4px 8px; border-radius: 8px; }
+        .obs-classic-link:hover { color: var(--xp-strong); background: rgba(255,255,255,.05); }
+        @media (max-width: 900px) {
+          .obs-hero { left: 16px; top: 70px; }
+          .obs-hero h1 { font-size: 38px; }
+          .obs-lede { font-size: 13.5px; }
+          .obs-loop, .obs-detail { display: none; }
+          .obs-stations { grid-template-columns: 1fr; width: calc(100vw - 32px); right: 16px; bottom: 64px; gap: 6px; }
+          .obs-classic { right: auto; left: 16px; flex-wrap: wrap; white-space: normal; }
+          .obs-card { padding: 10px 14px; }
+          .obs-card-q { display: none; }
+        }
+      `}</style>
     </main>
   );
 }
