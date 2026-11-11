@@ -2,8 +2,9 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Crosshair, Grip, Hand, Home, RotateCcw, SlidersHorizontal } from "lucide-react";
-import { Journal, logJournal, PhaseTrack, Phase, Predict, TopBar, Toast, useToast } from "../xp/Shell";
+import { ArrowDown, ArrowUp, Box, Crosshair, Grip, Hand, Home, Play, Plus, Repeat, RotateCcw, SlidersHorizontal, Square, Trash2 } from "lucide-react";
+import { Coach, Journal, logJournal, PhaseTrack, Phase, Predict, TopBar, Toast, useMissionProgress, useToast } from "../xp/Shell";
+import { play } from "../xp/sound";
 import { DEFAULT_ARM, JointState, SHOULDER_LIMIT, forward, gravityTorques, solveSpatial } from "../lib/engines/robotics";
 import type { Beacon, CubeSpec, SimControl, Telemetry, Zone } from "./RobotSim";
 
@@ -101,9 +102,16 @@ export default function RoboticsLab() {
   const [revealed, setRevealed] = useState<string | null>(null);
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [flags, setFlags] = useState<Record<string, boolean>>({});
-  const [done, setDone] = useState<Record<string, boolean>>({});
+  const { done, complete } = useMissionProgress("robotica");
+  // programa (teach pendant): poses grabadas + estado de la pinza
+  const [program, setProgram] = useState<{ joints: JointState; grip: boolean }[]>([]);
+  const [running, setRunning] = useState(false);
+  const [loop, setLoop] = useState(false);
+  const [step, setStep] = useState(-1);
   const [lastReq, setLastReq] = useState<{ torque: number; ok: boolean } | null>(null);
   const { msg, say } = useToast();
+  // gancho de inspección (pruebas y depuración): última telemetría del simulador
+  useEffect(() => { (window as unknown as { __umbralRobot?: Telemetry | null }).__umbralRobot = tel; }, [tel]);
 
   const beacons: Beacon[] = useMemo(() => mission.beacons.map((p, i) => ({ id: "ABCD"[i], pos: p, reachable: !!reachable(p) })), [mission]);
   const truthBeacons = beacons.filter((b) => b.reachable).map((b) => b.id).sort().join(",");
@@ -142,10 +150,10 @@ export default function RoboticsLab() {
     const id = setInterval(() => {
       const evs = control.current.events.splice(0);
       for (const e of evs) {
-        if (e.type === "grasp") { say(`Agarre: ${e.detail} sujeto. Hombro: ${e.torque!.toFixed(1)} N·m.`, "good"); setFlags((f) => ({ ...f, grasp: true })); setLastReq({ torque: e.torque!, ok: true }); }
-        if (e.type === "grasp-refused") { say(`El hombro necesitaría ${e.torque!.toFixed(1)} N·m > ${SHOULDER_LIMIT} N·m: el motor no puede sostener la carga aquí.`, "bad"); setFlags((f) => ({ ...f, try: true })); setLastReq({ torque: e.torque!, ok: false }); }
-        if (e.type === "release") say("Pinza abierta.", "info");
-        if (e.type === "stall") say(`Saturación: el hombro llegaría a ${e.torque!.toFixed(1)} N·m (límite ${SHOULDER_LIMIT}). Movimiento detenido.`, "bad");
+        if (e.type === "grasp") { play("grip"); say(`Agarre: ${e.detail} sujeto. Hombro: ${e.torque!.toFixed(1)} N·m.`, "good"); setFlags((f) => ({ ...f, grasp: true })); setLastReq({ torque: e.torque!, ok: true }); }
+        if (e.type === "grasp-refused") { play("fail"); say(`El hombro necesitaría ${e.torque!.toFixed(1)} N·m > ${SHOULDER_LIMIT} N·m: el motor no puede sostener la carga aquí.`, "bad"); setFlags((f) => ({ ...f, try: true })); setLastReq({ torque: e.torque!, ok: false }); }
+        if (e.type === "release") { play("release"); say("Pinza abierta.", "info"); }
+        if (e.type === "stall") { play("stall"); setRunning(false); } if (e.type === "stall") say(`Saturación: el hombro llegaría a ${e.torque!.toFixed(1)} N·m (límite ${SHOULDER_LIMIT}). Movimiento detenido.`, "bad");
       }
     }, 120);
     return () => clearInterval(id);
@@ -195,11 +203,11 @@ export default function RoboticsLab() {
   const allDone = mission.objectives.length > 0 && mission.objectives.every((o) => objDone[o.id]);
   useEffect(() => {
     if (allDone && !done[mission.id]) {
-      setDone((d) => ({ ...d, [mission.id]: true }));
+      complete(mission.id);
       say(`Misión «${mission.title}» completada.`, "good");
       logJournal({ lab: "robotica", kind: "mision", text: `Misión ${mission.code} «${mission.title}» completada.`, ok: true });
     }
-  }, [allDone, done, mission, say]);
+  }, [allDone, done, mission, say, complete]);
 
   const phase: Phase = !accepted ? 0 : picked.length === 0 ? 1 : revealed == null ? 2 : allDone ? 4 : 3;
 
@@ -221,6 +229,35 @@ export default function RoboticsLab() {
 
   const nudge = (dy: number) => { if (target) goTo([target[0], Math.max(0.02, target[1] + dy), target[2]]); };
   const toggleGrip = () => { const g = !grip; setGrip(g); control.current.grip = g; };
+  const setGripTo = (g: boolean) => { setGrip(g); control.current.grip = g; };
+
+  // ---- ejecución del programa: mover → esperar llegada → pinza → siguiente ----
+  const runRef = useRef({ i: 0, phase: "move" as "move" | "wait" | "grip", t: 0 });
+  useEffect(() => {
+    if (!running) return;
+    runRef.current = { i: 0, phase: "move", t: 0 };
+    const id = setInterval(() => {
+      const r = runRef.current;
+      const p = program[r.i];
+      if (!p) { if (loop && program.length) { r.i = 0; r.phase = "move"; return; } setRunning(false); setStep(-1); say("Programa terminado.", "good"); return; }
+      setStep(r.i);
+      if (r.phase === "move") { control.current.goal = { ...p.joints }; setTarget(null); setMode("ik"); r.phase = "wait"; r.t = performance.now(); return; }
+      if (r.phase === "wait" && control.current.goal == null) { if (control.current.grip !== p.grip) setGripTo(p.grip); r.phase = "grip"; r.t = performance.now(); return; }
+      if (r.phase === "grip" && performance.now() - r.t > 450) { r.i += 1; r.phase = "move"; }
+    }, 80);
+    return () => clearInterval(id);
+  }, [running, program, loop, say]);
+
+  function goToCube(id: string) {
+    const c = tel?.cubes[id]; if (!c) return;
+    play("select"); goTo([c.pos[0], c.pos[1] + 0.14, c.pos[2]]);
+  }
+  function goToBeacon(id: string) {
+    const b = beacons.find((x) => x.id === id); if (!b) return;
+    play("select");
+    const r = reachable(b.pos);
+    if (r) { setPitch(r.pitch); goTo(b.pos, r.pitch, r.elbow); } else goTo(b.pos, -90, elbow);
+  }
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
@@ -247,7 +284,7 @@ export default function RoboticsLab() {
     <main className="xp">
       <Stage camera={{ position: [2.5, 1.75, 2.3], fov: 40 }} fog={[4, 9]} bloom={1}>
         <RobotSim spec={spec} control={control} cubes={mission.cubes} cubesKey={cubesKey} beacons={beacons} zone={mission.zone} lens={lens}
-          target={target} ghost={ghost} onTelemetry={setTel} onPickPoint={onPickPoint} />
+          target={target} ghost={ghost} onTelemetry={setTel} onPickPoint={onPickPoint} onBeacon={goToBeacon} />
       </Stage>
 
       <div className="xp-hud">
@@ -356,10 +393,57 @@ export default function RoboticsLab() {
                 })
               )}
             </div>
+
+            {(mission.cubes.length > 0 || beacons.length > 0) && (
+              <div className="xp-panel-section">
+                <p className="xp-eyebrow"><i /> Objetos · ir a</p>
+                <div className="xp-choice-row">
+                  {mission.cubes.map((c) => (
+                    <button key={c.id} type="button" className="xp-choice" onClick={() => goToCube(c.id)} title="Coloca la pinza encima">
+                      <Box size={12} style={{ verticalAlign: -2, color: c.color }} /> {c.label}{tel?.held === c.id ? " · sujeto" : ""}
+                    </button>
+                  ))}
+                  {beacons.map((b) => <button key={b.id} type="button" className="xp-choice" onClick={() => goToBeacon(b.id)}>Baliza {b.id}{touched.has(b.id) ? " ✓" : ""}</button>)}
+                  {mission.zone && (
+                    <button type="button" className="xp-choice" style={{ borderColor: "rgba(93,242,165,.5)", color: "var(--xp-good)" }}
+                      onClick={() => { play("select"); goTo([mission.zone!.center[0], Math.max(0.16, target?.[1] ?? 0.16), mission.zone!.center[1]]); }}>
+                      Zona de entrega
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="xp-panel-section">
+              <p className="xp-eyebrow"><i style={{ background: running ? "var(--xp-good)" : undefined }} /> Programa · {program.length} puntos {running ? `· ejecutando ${step + 1}` : ""}</p>
+              <p className="xp-p xp-small xp-muted">Graba la pose y el estado de la pinza, como el «teach pendant» de un robot industrial; después reprodúcelo.</p>
+              {program.length > 0 && (
+                <ol style={{ margin: "8px 0 0", paddingLeft: 18, maxHeight: 120, overflow: "auto", fontFamily: "var(--xp-mono)", fontSize: 11 }}>
+                  {program.map((p, i) => (
+                    <li key={i} style={{ color: i === step ? "var(--xp-amber)" : undefined }}>
+                      θ {p.joints.yaw.toFixed(0)}/{p.joints.shoulder.toFixed(0)}/{p.joints.elbow.toFixed(0)}/{p.joints.wrist.toFixed(0)}° · pinza {p.grip ? "cerrada" : "abierta"}
+                    </li>
+                  ))}
+                </ol>
+              )}
+              <div className="xp-btn-row">
+                <button type="button" className="xp-btn" disabled={running} onClick={() => { play("click"); setProgram((p) => [...p, { joints: { ...j }, grip }]); }}><Plus size={13} /> Grabar punto</button>
+                {!running
+                  ? <button type="button" className="xp-btn xp-btn-cyan" disabled={program.length === 0} onClick={() => { play("send"); setRunning(true); }}><Play size={13} /> Ejecutar</button>
+                  : <button type="button" className="xp-btn xp-btn-danger" onClick={() => { setRunning(false); setStep(-1); control.current.goal = null; }}><Square size={13} /> Parar</button>}
+                <button type="button" className={`xp-btn ${loop ? "xp-btn-cyan" : ""}`} onClick={() => setLoop((v) => !v)} aria-pressed={loop}><Repeat size={13} /> Bucle</button>
+                <button type="button" className="xp-btn" disabled={running || program.length === 0} onClick={() => setProgram([])} aria-label="Borrar programa"><Trash2 size={13} /></button>
+              </div>
+            </div>
           </aside>
         )}
 
         <Journal lab="robotica" open={journal} onClose={() => setJournal(false)} />
+        <Coach lab="robotica" steps={[
+          { title: "Elige una misión y predice", text: "Cada misión empieza con una pregunta. Responde ANTES de mover el brazo: el simulador comparará tu predicción con el cálculo." },
+          { title: "Mueve el brazo", text: "Haz clic en la mesa, en un cubo o en una baliza (o usa los accesos de «Objetos»). El solver de IK calcula los ángulos; ↑/↓ cambia la altura y Espacio abre o cierra la pinza.", kbd: "Espacio" },
+          { title: "Enciende la lente", text: "Muestra la envolvente de trabajo, la solución alternativa del codo y la fórmula del torque en vivo. Graba poses en «Programa» para repetir una tarea como un robot industrial.", kbd: "L" },
+        ]} />
 
         <div className="xp-hint-bar">Clic en mesa/cubo/baliza = objetivo · ↑↓ altura · Espacio pinza · H inicio · arrastra para orbitar</div>
         <nav className="xp-dock" aria-label="Controles del brazo">

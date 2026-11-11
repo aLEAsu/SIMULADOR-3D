@@ -5,7 +5,7 @@ import { useFrame, ThreeEvent } from "@react-three/fiber";
 import { Grid, Html, OrbitControls, RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
 import { NetDevice, NetScene as Scene } from "./missions";
-import { PacketTrace, subnetInfo } from "../lib/engines/networking";
+import { HopFrame, PacketTrace, subnetInfo } from "../lib/engines/networking";
 
 export type Tool = "select" | "cable" | "ping" | "cut";
 
@@ -213,11 +213,43 @@ function Cable({ curve, state, lens, onClick, tool, color }: { curve: THREE.Quad
   );
 }
 
+/** Ficha de encapsulación que viaja con el paquete: las capas tal como van
+ * en ESTE tramo. Resalta lo que cambió respecto del tramo anterior (MAC
+ * reescrita y TTL decrementado por el router; IP de extremo a extremo intacta). */
+function Encapsulation({ frame, prev, trace, color }: { frame: HopFrame; prev: HopFrame | null; trace: PacketTrace; color: string }) {
+  const macChanged = !!prev && prev.l2_src !== frame.l2_src;
+  const ttlChanged = !!prev && prev.ttl !== frame.ttl;
+  const row = (k: string, v: string, hot = false) => (
+    <div className={`xp-encap-row ${hot ? "hot" : ""}`}><span>{k}</span><b>{v}</b></div>
+  );
+  return (
+    <Html position={[0, 0.32, 0]} center zIndexRange={[20, 0]}>
+      <div className="xp-encap" style={{ borderColor: color }}>
+        <div className="xp-encap-layer l2">
+          <i>L2 · Ethernet{frame.vlan ? ` · 802.1Q VLAN ${frame.vlan}` : ""}</i>
+          {row("src", frame.l2_src.slice(-8), macChanged)}
+          {row("dst", frame.l2_dst.slice(-8), macChanged)}
+          <div className="xp-encap-layer l3">
+            <i>L3 · IPv4</i>
+            {row("src", trace.src_ip)}
+            {row("dst", trace.dst_ip)}
+            {row("TTL", String(frame.ttl), ttlChanged)}
+            <div className="xp-encap-layer l4"><i>ICMP · echo request</i></div>
+          </div>
+        </div>
+        {(macChanged || ttlChanged) && <p className="xp-encap-note">El router reescribió la trama L2{ttlChanged ? " y bajó el TTL" : ""}; la IP no cambia.</p>}
+      </div>
+    </Html>
+  );
+}
+
 /** Paquete en vuelo: recorre los tramos de la traza calculada. */
 function Packet({ trace, curves, onStep, onDone }: { trace: PacketTrace; curves: Map<string, { curve: THREE.QuadraticBezierCurve3; reversed: boolean }>; onStep: (i: number) => void; onDone: () => void }) {
   const ref = useRef<THREE.Group>(null);
   const burst = useRef<THREE.Mesh>(null);
   const t = useRef({ seg: 0, u: 0, pause: 0.25, finished: false, burstT: 0, lastSeg: -1 });
+  const [seg, setSeg] = useState(0);
+  const [ended, setEnded] = useState(false);
   const segs = trace.frames;
   const delivered = trace.delivered;
   useFrame((_, dt) => {
@@ -232,7 +264,7 @@ function Packet({ trace, curves, onStep, onDone }: { trace: PacketTrace; curves:
       }
       return;
     }
-    if (s.seg !== s.lastSeg) { s.lastSeg = s.seg; onStep(s.seg); }
+    if (s.seg !== s.lastSeg) { s.lastSeg = s.seg; onStep(s.seg); setSeg(s.seg); }
     if (s.pause > 0) { s.pause -= dt; return; }
     const f = segs[s.seg];
     if (!f) { s.finished = true; onDone(); return; }
@@ -244,7 +276,7 @@ function Packet({ trace, curves, onStep, onDone }: { trace: PacketTrace; curves:
     if (s.u >= 1) {
       const blockedHere = trace.stop_at === f.to;
       const last = s.seg === segs.length - 1;
-      if (blockedHere || last) { s.finished = true; onDone(); }
+      if (blockedHere || last) { s.finished = true; setEnded(true); onDone(); }
       else { s.seg += 1; s.u = 0; s.pause = 0.22; }
     }
   });
@@ -254,6 +286,7 @@ function Packet({ trace, curves, onStep, onDone }: { trace: PacketTrace; curves:
       <mesh><sphereGeometry args={[0.09, 24, 24]} /><meshStandardMaterial color={col} emissive={col} emissiveIntensity={6} toneMapped={false} /></mesh>
       <pointLight color={col} intensity={3} distance={2.2} />
       <mesh ref={burst} scale={0.01}><sphereGeometry args={[0.12, 24, 24]} /><meshStandardMaterial color={col} emissive={col} emissiveIntensity={4} transparent opacity={0} toneMapped={false} depthWrite={false} /></mesh>
+      {segs[seg] && !ended && <Encapsulation frame={segs[seg]} prev={seg > 0 ? segs[seg - 1] : null} trace={trace} color={col} />}
     </group>
   );
 }
@@ -292,7 +325,7 @@ export default function NetScene({ scene, lens, tool, selected, pending, trace, 
 
   return (
     <>
-      <OrbitControls ref={controls} makeDefault enabled={!dragging} target={[0, 0, 0]} maxPolarAngle={1.32} minDistance={4} maxDistance={22} enableDamping />
+      <OrbitControls ref={controls} makeDefault enabled={!dragging} target={[-1.8, 0, 0.4]} maxPolarAngle={1.32} minDistance={4} maxDistance={22} enableDamping />
       <hemisphereLight args={["#9fb8ff", "#120d06", 0.35]} />
       <directionalLight position={[6, 10, 5]} intensity={1.6} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-10} shadow-camera-right={10} shadow-camera-top={10} shadow-camera-bottom={-10} />
       <spotLight position={[-8, 7, -6]} angle={0.5} penumbra={1} intensity={30} color="#5ee7ff" />

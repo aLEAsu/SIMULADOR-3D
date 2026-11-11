@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import * as THREE from "three";
 import { ArrowUpRight, Eye, FlaskConical, Lightbulb, Microscope, Orbit, Sprout, Target } from "lucide-react";
-import { readJournal } from "./xp/Shell";
+import { readJournal, readProgress } from "./xp/Shell";
 import type { Monolith, Station } from "./xp/Observatory";
 import "./xp/xp.css";
 
@@ -32,11 +32,19 @@ export default function ObservatoryPage() {
   const [hovered, setHovered] = useState<string | null>(null);
   const [fly, setFly] = useState<THREE.Vector3 | null>(null);
   const [stats, setStats] = useState({ preds: 0, hits: 0, missions: 0 });
+  const [progress, setProgress] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const j = readJournal();
     const preds = j.filter((e) => e.kind === "prediccion" && e.ok != null);
-    setStats({ preds: preds.length, hits: preds.filter((e) => e.ok).length, missions: j.filter((e) => e.kind === "mision").length });
+    const p = readProgress();
+    setStats({ preds: preds.length, hits: preds.filter((e) => e.ok).length, missions: (p.redes?.length ?? 0) + (p.robotica?.length ?? 0) });
+    // avance por laboratorio (misiones completadas, o estructuras localizadas en Anatomía)
+    setProgress({
+      networking: `${p.redes?.length ?? 0}/4 misiones`,
+      robotics: `${p.robotica?.length ?? 0}/3 misiones`,
+      anatomy: `${p.anatomia?.length ?? 0} localizadas`,
+    });
     STATIONS.forEach((s) => router.prefetch(s.href));
   }, [router]);
 
@@ -53,7 +61,7 @@ export default function ObservatoryPage() {
   return (
     <main className="xp obs">
       <Stage camera={{ position: [0, 2.6, 8.6], fov: 42 }} fog={[9, 22]} bloom={1.15}>
-        <Observatory stations={STATIONS} monoliths={MONOLITHS} labels={Object.fromEntries(STATIONS.map((s) => [s.id, { code: s.code, title: s.title }]))}
+        <Observatory stations={STATIONS} monoliths={MONOLITHS} labels={Object.fromEntries(STATIONS.map((s) => [s.id, { code: s.code, title: s.title, progress: progress[s.id] }]))}
           hovered={hovered} onHover={setHovered} onSelect={(s) => go(s.id)} onSelectMonolith={(m) => router.push(m.href)} flyTo={fly} />
       </Stage>
 
@@ -79,7 +87,7 @@ export default function ObservatoryPage() {
           {STATIONS.map((s) => (
             <button key={s.id} type="button" className={`obs-card ${hovered === s.id ? "is-hot" : ""}`} style={{ "--c": s.color } as React.CSSProperties}
               onMouseEnter={() => setHovered(s.id)} onMouseLeave={() => setHovered(null)} onFocus={() => setHovered(s.id)} onBlur={() => setHovered(null)} onClick={() => go(s.id)}>
-              <span className="obs-card-code">{s.code}</span>
+              <span className="obs-card-code">{s.code}{progress[s.id] && <span className="obs-card-prog">{progress[s.id]}</span>}</span>
               <span className="obs-card-title">{s.title} <ArrowUpRight size={15} /></span>
               <span className="obs-card-q">{s.question}</span>
             </button>
@@ -115,6 +123,8 @@ export default function ObservatoryPage() {
         .obs-card-code { font-family: var(--xp-mono); font-size: 10px; letter-spacing: .14em; color: var(--c); }
         .obs-card-title { display: flex; justify-content: space-between; align-items: center; font-family: var(--xp-display); font-size: 19px; font-weight: 600; color: var(--xp-strong); }
         .obs-card-q { color: var(--xp-muted); font-size: 12.5px; }
+        .obs-card-code { display: flex; justify-content: space-between; gap: 8px; }
+        .obs-card-prog { color: var(--xp-muted); letter-spacing: .04em; }
         .obs-detail { position: absolute; right: 40px; top: 110px; width: 280px; padding: 14px 16px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); background: var(--xp-glass); backdrop-filter: blur(16px); animation: xp-in .35s var(--xp-ease) both; }
         .obs-classic { position: absolute; right: 40px; bottom: 20px; display: flex; align-items: center; gap: 12px; white-space: nowrap; }
         .obs-classic-link { display: inline-flex; align-items: center; gap: 6px; color: var(--xp-muted); text-decoration: none; font-size: 12px; padding: 4px 8px; border-radius: 8px; }

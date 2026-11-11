@@ -99,7 +99,7 @@ function MiniArm({ active }: { active: boolean }) {
   );
 }
 
-function Pedestal({ s, hovered, onHover, onSelect, label }: { s: Station; hovered: boolean; onHover: (id: string | null) => void; onSelect: (s: Station) => void; label: { code: string; title: string } }) {
+function Pedestal({ s, hovered, onHover, onSelect, label }: { s: Station; hovered: boolean; onHover: (id: string | null) => void; onSelect: (s: Station) => void; label: { code: string; title: string; progress?: string } }) {
   const pos = stationPos(s.angle);
   const ring = useRef<THREE.MeshStandardMaterial>(null);
   useFrame((_, dt) => { if (ring.current) ring.current.emissiveIntensity += ((hovered ? 4 : 1.2) - ring.current.emissiveIntensity) * Math.min(1, dt * 6); });
@@ -120,7 +120,7 @@ function Pedestal({ s, hovered, onHover, onSelect, label }: { s: Station; hovere
       <mesh position={[0, 1.6, 0]}><cylinderGeometry args={[0.9, 0.9, 2.2, 48, 1, true]} /><meshBasicMaterial color={s.color} transparent opacity={hovered ? 0.035 : 0.0} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} /></mesh>
       <Html position={[0, 0.05, 1.12]} center zIndexRange={[5, 0]}>
         <div className="xp-label3d" style={{ borderColor: hovered ? s.color : undefined, padding: "5px 10px" }}>
-          <small style={{ color: s.color }}>{label.code}</small>{label.title}
+          <small style={{ color: s.color }}>{label.code}</small>{label.title}{label.progress && <small style={{ color: "#7f8ca8" }}>{label.progress}</small>}
         </div>
       </Html>
     </group>
@@ -168,7 +168,7 @@ function Rig({ flyTo, hovered, stations }: { flyTo: THREE.Vector3 | null; hovere
 }
 
 export default function Observatory({ stations, monoliths, labels, hovered, onHover, onSelect, onSelectMonolith, flyTo }: {
-  stations: Station[]; monoliths: Monolith[]; labels: Record<string, { code: string; title: string }>;
+  stations: Station[]; monoliths: Monolith[]; labels: Record<string, { code: string; title: string; progress?: string }>;
   hovered: string | null; onHover: (id: string | null) => void; onSelect: (s: Station) => void; onSelectMonolith: (m: Monolith) => void; flyTo: THREE.Vector3 | null;
 }) {
   return (

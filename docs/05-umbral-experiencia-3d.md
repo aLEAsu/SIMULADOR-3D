@@ -52,9 +52,38 @@ Escena 3D con tres pedestales y sus dioramas animados (un holograma humano, una 
 - `npx tsc --noEmit` y `next build` sin errores.
 - En navegador se probaron: el ciclo completo de la misión 01 de Redes (predicción, ping animado, objetivo, lente, traza y matriz); el observatorio y el vuelo de cámara a Robótica; la carga y el movimiento del brazo hacia el cubo; Anatomía con 4/4 capas, ficha, búsqueda y lente.
 
+## Iteración 2 — auditoría y mejoras
+
+Se auditó cada laboratorio en el navegador. Estos son los hallazgos y lo que se hizo:
+
+| Hallazgo | Arreglo |
+|---|---|
+| Cerrar la pinza mientras el brazo aún baja hacía que los dedos aplastaran el cubo contra la mesa en vez de tomarlo. | Si la pinza está cerrada y vacía, toma el cubo en cuanto entra entre los dedos (tolerancia ajustada a las puntas). |
+| El cubo es pequeño en pantalla y los clics caían en la mesa. Las balizas en el aire no se podían clicar. | Las balizas son clicables y hay accesos directos «Objetos · ir a» para cubos, balizas y zona de entrega. |
+| En equipos lentos el brazo iba en cámara lenta: el paso de tiempo tenía un tope de 1/30 s. | El movimiento articular usa tiempo real (tope de 0,25 s). Además hay calidad adaptativa: si caen los FPS, baja la resolución y se apaga el bloom. |
+| Un punto brillante suelto en la mesa (reflejo especular). | La mesa de la celda es mate y se quitó la fuente de luz con forma de anillo del entorno. |
+| Sin WebGL, o con un fallo de GPU, la pantalla quedaba en blanco. | Detección de WebGL y barrera de errores con un mensaje que explica qué hacer. |
+| Los paneles laterales tapaban parte de la red. | Se reencuadró la cámara de Redes. |
+
+Funcionalidades nuevas:
+
+- **Robótica · programa (teach pendant):** graba poses y estado de la pinza, ejecútalas en orden o en bucle, como se programa un robot industrial. Si el motor del hombro se satura, la ejecución se detiene.
+- **Redes · encapsulación en vuelo:** una ficha viaja con el paquete y muestra las capas L2 Ethernet (con 802.1Q si hay VLAN), L3 IPv4 e ICMP del tramo actual. Resalta la MAC reescrita y el TTL decrementado en cada router; la IP de extremo a extremo se mantiene.
+- **Progreso persistente:** las misiones completadas (y las estructuras localizadas en Anatomía) se guardan en el navegador y se ven en las tarjetas y pedestales del observatorio.
+- **Diseño sonoro:** firmas sintetizadas con WebAudio (envío, salto, entrega, fallo, agarre, saturación, misión cumplida), sin archivos de audio y con botón para silenciar.
+- **Guía de primer uso:** 3 pasos por laboratorio, solo la primera vez.
+
+Verificado en navegador:
+
+- La misión 02 de Robótica completa: agarre (21,3 N·m), traslado y entrega. Los dos objetivos quedan cumplidos y la fase pasa a «Explica».
+- La ejecución de un programa de 2 puntos, que llega exactamente a cada pose grabada.
+- La ficha de encapsulación en vuelo y el progreso en el observatorio.
+- La traza a través de un router comprobada con Node: TTL de 64 a 63 y MAC reescrita solo en el tramo del router.
+
+`window.__umbralRobot` expone la última telemetría del brazo, en solo lectura, para pruebas y depuración.
+
 ## Límites conocidos y pendientes
 
-- **Robótica, agarre completo de punta a punta**: el movimiento y la telemetría se vieron funcionando, pero la secuencia pick & place completa no se pudo cerrar en el panel de pruebas porque el navegador pausa la animación cuando el panel queda oculto. Conviene probarla a mano antes de presentar.
 - La Bitácora vive en `localStorage` (por navegador); no se sincroniza con el backend.
 - Los laboratorios insignia no usan todavía la colaboración en tiempo real ni el tutor de IA de los clásicos.
 - Rendimiento: Anatomía carga ~24 MB de GLB (Draco) y unas 2.900 mallas. Va fluido en escritorio; en móvil no se midió.
