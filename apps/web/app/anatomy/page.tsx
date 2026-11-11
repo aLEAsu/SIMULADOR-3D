@@ -4,7 +4,8 @@ import dynamic from "next/dynamic";
 import { useCallback, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Crosshair, Eye, EyeOff, Focus, Layers, Scissors, Search, X } from "lucide-react";
-import { Journal, Loader, logJournal, PhaseTrack, Phase, Predict, TopBar, Toast, useToast } from "../xp/Shell";
+import { Coach, Journal, Loader, logJournal, markMissionDone, PhaseTrack, Phase, Predict, TopBar, Toast, useToast } from "../xp/Shell";
+import { play } from "../xp/sound";
 import { LAYERS, LayerId, LayerState, Registry, Structure, structureBounds } from "./AnatomyScene";
 
 const Stage = dynamic(() => import("../xp/Stage"), { ssr: false });
@@ -119,11 +120,14 @@ export default function AnatomyLab() {
       const sysOk = round.predicted === roundS!.layer;
       setScore((s) => ({ n: s.n + 1, sys: s.sys + (sysOk ? 1 : 0), loc: s.loc + (exact ? 1 : 0) }));
       logJournal({ lab: "anatomia", kind: "prediccion", text: `«${ES[roundS!.base]}»: predije sistema ${layerLabel(round.predicted)} (real: ${layerLabel(roundS!.layer)}); ubicación ${exact ? "exacta" : `a ${errCm?.toFixed(1)} cm`}.`, ok: sysOk && exact });
+      play(exact ? "success" : "fail");
+      if (exact) markMissionDone("anatomia", roundS!.key);
       say(exact ? "¡Localización exacta!" : `Elegiste «${clickedS.name}». El objetivo estaba a ${errCm?.toFixed(1)} cm (en verde).`, exact ? "good" : "bad");
       if (b) setFocus({ center: b.center, radius: Math.max(b.radius, 0.12), id: Date.now() });
       setSelected(key);
       return;
     }
+    play("select");
     select(key);
   }
 
@@ -281,6 +285,11 @@ export default function AnatomyLab() {
         )}
 
         <Journal lab="anatomia" open={journal} onClose={() => setJournal(false)} />
+        <Coach lab="anatomia" steps={[
+          { title: "Cuatro sistemas, un cuerpo", text: "Óseo, muscular, cardiovascular y nervioso, alineados como en la fuente. Retira capas, ajusta su transparencia o córtalas con un plano." },
+          { title: "Cada estructura tiene ficha", text: "Haz clic en cualquier estructura o búscala (en inglés de la fuente o en español). La ficha muestra lateralidad, grupo funcional y medidas sobre el modelo." },
+          { title: "Rayos X y reto «Localiza»", text: "La lente vuelve el cuerpo translúcido. En «Localiza» predices el sistema de una estructura y luego la señalas: el error se mide en centímetros.", kbd: "L" },
+        ]} />
         <div className="xp-hint-bar">Arrastra para orbitar · rueda para acercar · clic en estructura = ficha · L rayos X</div>
       </div>
     </main>

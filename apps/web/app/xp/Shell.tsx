@@ -6,8 +6,9 @@
  * Revela → Explica), bloque de predicción y bitácora persistente.
  */
 import Link from "next/link";
-import { ReactNode, useEffect, useState } from "react";
-import { ArrowLeft, BookOpen, ShieldCheck, X } from "lucide-react";
+import { ReactNode, useCallback, useEffect, useState } from "react";
+import { ArrowLeft, BookOpen, ShieldCheck, Volume2, VolumeX, X } from "lucide-react";
+import { isMuted, play, setMuted } from "./sound";
 import "./xp.css";
 
 export const PHASES = ["Misión", "Predice", "Experimenta", "Revela", "Explica"] as const;
@@ -19,11 +20,17 @@ export function TopBar({ code, title, lens, onLens, fidelity, onJournal, right }
   onJournal: () => void; right?: ReactNode;
 }) {
   const [showFid, setShowFid] = useState(false);
+  const [muted, setMutedState] = useState(false);
+  useEffect(() => {
+    const sync = () => setMutedState(isMuted());
+    sync(); window.addEventListener("xp-sound", sync);
+    return () => window.removeEventListener("xp-sound", sync);
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
-      if (e.key.toLowerCase() === "l") onLens();
+      if (e.key.toLowerCase() === "l") { play("lens"); onLens(); }
       if (e.key.toLowerCase() === "b") onJournal();
     };
     window.addEventListener("keydown", onKey);
@@ -50,8 +57,11 @@ export function TopBar({ code, title, lens, onLens, fidelity, onJournal, right }
           </div>
         )}
       </span>
+      <button className="xp-chip" type="button" onClick={() => { setMuted(!muted); if (muted) play("select"); }} aria-label={muted ? "Activar sonido" : "Silenciar"} title={muted ? "Activar sonido" : "Silenciar"}>
+        {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+      </button>
       <button className="xp-chip" type="button" onClick={onJournal}><BookOpen size={14} /> <span className="xp-hide-sm">Bitácora</span> <span className="xp-kbd">B</span></button>
-      <button type="button" className={`xp-lens ${lens ? "is-on" : ""}`} onClick={onLens} aria-pressed={lens} title="Revela lo invisible (L)">
+      <button type="button" className={`xp-lens ${lens ? "is-on" : ""}`} onClick={() => { play("lens"); onLens(); }} aria-pressed={lens} title="Revela lo invisible (L)">
         <span className="xp-lens-dot" /> LENTE {lens ? "ON" : "OFF"} <span className="xp-kbd" style={{ borderColor: "currentColor", color: "inherit" }}>L</span>
       </button>
     </div>
@@ -104,7 +114,8 @@ export function Toast({ msg }: { msg: { text: string; tone?: "good" | "bad" | "i
 
 export function useToast() {
   const [msg, setMsg] = useState<{ text: string; tone?: "good" | "bad" | "info"; id: number } | null>(null);
-  return { msg, say: (text: string, tone?: "good" | "bad" | "info") => setMsg({ text, tone, id: Date.now() + Math.random() }) };
+  const say = useCallback((text: string, tone?: "good" | "bad" | "info") => setMsg({ text, tone, id: Date.now() + Math.random() }), []);
+  return { msg, say };
 }
 
 // ---------- bitácora ----------
@@ -168,6 +179,53 @@ export function Loader({ label, done }: { label: string; done: boolean }) {
   return (
     <div className="xp-loader" style={{ opacity: done ? 0 : 1, pointerEvents: done ? "none" : "auto" }}>
       <div className="xp-loader-inner"><div className="xp-loader-ring" />{label}</div>
+    </div>
+  );
+}
+
+// ---------- progreso persistente ----------
+const PKEY = "xp-progress-v1";
+export type Progress = Record<string, string[]>; // lab -> ids de misiones completadas
+export function readProgress(): Progress {
+  try { return JSON.parse(localStorage.getItem(PKEY) || "{}"); } catch { return {}; }
+}
+export function markMissionDone(lab: string, id: string) {
+  try {
+    const p = readProgress();
+    if (!(p[lab] ?? []).includes(id)) { p[lab] = [...(p[lab] ?? []), id]; localStorage.setItem(PKEY, JSON.stringify(p)); }
+  } catch { /* sin almacenamiento: el progreso es una comodidad */ }
+}
+/** Estado {misión: completada} inicializado desde el almacenamiento. */
+export function useMissionProgress(lab: string) {
+  const [done, setDone] = useState<Record<string, boolean>>({});
+  useEffect(() => { setDone(Object.fromEntries((readProgress()[lab] ?? []).map((id) => [id, true]))); }, [lab]);
+  const complete = useCallback((id: string) => { markMissionDone(lab, id); setDone((d) => ({ ...d, [id]: true })); play("success"); }, [lab]);
+  return { done, complete };
+}
+
+// ---------- guía de primer uso ----------
+export function Coach({ lab, steps }: { lab: string; steps: { title: string; text: string; kbd?: string }[] }) {
+  const key = `xp-coach-${lab}`;
+  const [i, setI] = useState<number | null>(null);
+  useEffect(() => { try { if (!localStorage.getItem(key)) setI(0); } catch { /* sin almacenamiento */ } }, [key]);
+  if (i == null) return null;
+  const close = () => { try { localStorage.setItem(key, "1"); } catch { /* */ } setI(null); };
+  const st = steps[i];
+  return (
+    <div className="xp-coach" role="dialog" aria-label="Cómo funciona este laboratorio">
+      <div className="xp-coach-card">
+        <p className="xp-eyebrow"><i /> Primer uso · {i + 1}/{steps.length}</p>
+        <h3 className="xp-h2">{st.title}</h3>
+        <p className="xp-p">{st.text}</p>
+        {st.kbd && <p className="xp-p xp-small xp-muted" style={{ marginTop: 8 }}>Atajo: <span className="xp-kbd">{st.kbd}</span></p>}
+        <div className="xp-coach-dots">{steps.map((_, k) => <i key={k} className={k === i ? "on" : ""} />)}</div>
+        <div className="xp-btn-row">
+          <button type="button" className="xp-btn" onClick={close}>Saltar</button>
+          <span style={{ flex: 1 }} />
+          {i > 0 && <button type="button" className="xp-btn" onClick={() => setI(i - 1)}>Atrás</button>}
+          <button type="button" className="xp-btn xp-btn-primary" onClick={() => { play("click"); if (i < steps.length - 1) setI(i + 1); else close(); }}>{i < steps.length - 1 ? "Siguiente" : "Empezar"}</button>
+        </div>
+      </div>
     </div>
   );
 }

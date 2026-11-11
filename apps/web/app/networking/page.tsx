@@ -3,7 +3,8 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Cable, Monitor, MousePointer2, Radio, Router, Scissors, Server, Shield, Trash2, Zap, Network } from "lucide-react";
-import { Journal, logJournal, PhaseTrack, Phase, Predict, TopBar, Toast, useToast } from "../xp/Shell";
+import { Coach, Journal, logJournal, PhaseTrack, Phase, Predict, TopBar, Toast, useMissionProgress, useToast } from "../xp/Shell";
+import { play } from "../xp/sound";
 import { MISSIONS, NetDevice, NetScene as Scene, PingLog } from "./missions";
 import type { Tool } from "./NetScene";
 import { DeviceType, PacketTrace, packetTrace, parseIPv4, runTopology, subnetInfo } from "../lib/engines/networking";
@@ -45,7 +46,7 @@ export default function NetworkingLab() {
   const [prediction, setPrediction] = useState<string | null>(null);
   const [truth, setTruth] = useState<string | null>(null);
   const [journal, setJournal] = useState(false);
-  const [done, setDone] = useState<Record<string, boolean>>({});
+  const { done, complete } = useMissionProgress("redes");
   const { msg, say } = useToast();
 
   const result = useMemo(() => runTopology(scene.devices, scene.links), [scene]);
@@ -56,11 +57,11 @@ export default function NetworkingLab() {
 
   useEffect(() => {
     if (allDone && !done[mission.id]) {
-      setDone((d) => ({ ...d, [mission.id]: true }));
+      complete(mission.id);
       logJournal({ lab: "redes", kind: "mision", text: `Misión ${mission.code} «${mission.title}» completada.`, ok: true });
       say(`Misión «${mission.title}» completada. Lee la explicación.`, "good");
     }
-  }, [allDone, done, mission, say]);
+  }, [allDone, done, mission, say, complete]);
 
   const loadMission = useCallback((i: number) => {
     setMissionIdx(i); setScene(MISSIONS[i].scene()); setSelected(null); setPending(null); setTrace(null);
@@ -94,6 +95,7 @@ export default function NetworkingLab() {
       // validación fallida: el motor no evalúa la red completa, pero la traza
       // del par sí es calculable (evaluatePair no exige red válida global).
     }
+    play("send");
     setTrace(t); setTraceKey((k) => k + 1); setFrame(0); setFlying(true);
     setPings((p) => [...p, { a, b, delivered: t.delivered }]);
   }, [scene, mission, prediction, truth, result]);
@@ -105,6 +107,7 @@ export default function NetworkingLab() {
     const t = traceRef.current;
     if (t) {
       const by = new Map(scene.devices.map((d) => [d.id, d.label]));
+      play(t.delivered ? "deliver" : "fail");
       say(t.delivered ? `ICMP echo entregado: ${by.get(t.pair.a)} → ${by.get(t.pair.b)} en ${t.pair.hops} saltos.` : `No entregado: ${t.pair.reason}.`, t.delivered ? "good" : "bad");
       logJournal({ lab: "redes", kind: "resultado", text: `Ping ${by.get(t.pair.a)} → ${by.get(t.pair.b)}: ${t.delivered ? "entregado" : "falló"} (${t.pair.reason}).`, ok: t.delivered });
     }
@@ -119,6 +122,7 @@ export default function NetworkingLab() {
       if (tool === "cable") {
         const exists = scene.links.some((l) => (l.a === pending && l.b === id) || (l.a === id && l.b === pending));
         if (!exists) setScene((s) => ({ ...s, links: [...s.links, { a: pending, b: id }] }));
+        play(exists ? "click" : "select");
         say(exists ? "Ya existe ese cable." : "Cable conectado.", exists ? "info" : "good");
       } else sendPing(pending, id);
       setPending(null);
@@ -165,10 +169,10 @@ export default function NetworkingLab() {
 
   return (
     <main className="xp">
-      <Stage camera={{ position: [0.6, 5.6, 7.6], fov: 42 }} fog={[16, 34]} bloom={1.1} onPointerMissed={() => { setSelected(null); }}>
+      <Stage camera={{ position: [-1.8, 9.6, 11.2], fov: 40 }} fog={[16, 34]} bloom={1.1} onPointerMissed={() => { setSelected(null); }}>
         <NetScene scene={scene} lens={lens} tool={tool} selected={selected} pending={pending} trace={trace} traceKey={traceKey} vlanCut={vlanCut}
           onDeviceClick={onDeviceClick} onLinkClick={(i) => setScene((s) => ({ ...s, links: s.links.filter((_, j) => j !== i) }))}
-          onMove={(id, pos) => updateDevice(id, { pos })} onTraceStep={setFrame} onTraceDone={onTraceDone} />
+          onMove={(id, pos) => updateDevice(id, { pos })} onTraceStep={(i) => { setFrame(i); if (i > 0) play("hop"); }} onTraceDone={onTraceDone} />
       </Stage>
 
       <div className="xp-hud">
@@ -314,6 +318,11 @@ export default function NetworkingLab() {
         )}
 
         <Journal lab="redes" open={journal} onClose={() => setJournal(false)} />
+        <Coach lab="redes" steps={[
+          { title: "Primero, predice", text: "Cada misión plantea una pregunta sobre la red. Elige tu respuesta antes de enviar el ping: el resultado calculado la confirmará o la desmentirá." },
+          { title: "Construye y prueba", text: "Arrastra equipos, conéctalos con Cable y envía un Ping. El paquete recorre la ruta real y su ficha muestra la encapsulación en cada tramo.", kbd: "C · P" },
+          { title: "Enciende la lente", text: "Revela las subredes como distritos, las VLAN, los cables que no conducen y la matriz de alcance de toda la red.", kbd: "L" },
+        ]} />
 
         {/* ---------- dock ---------- */}
         <div className="xp-hint-bar">{hintBar}</div>

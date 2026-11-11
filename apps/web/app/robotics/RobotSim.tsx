@@ -54,6 +54,7 @@ interface Props {
   ghost: JointState | null;
   onTelemetry: (t: Telemetry) => void;
   onPickPoint: (p: [number, number, number], cubeId?: string) => void;
+  onBeacon?: (id: string) => void;
 }
 
 const rad = THREE.MathUtils.degToRad;
@@ -157,12 +158,14 @@ function Controller({ spec, control, bodies, cubes, anchors, gripRef, jointsRef,
 }) {
   const held = useRef<{ id: string; offset: THREE.Matrix4 } | null>(null);
   const prevGrip = useRef(false);
+  const pending = useRef(false); // pinza cerrada y vacía, esperando que un cubo entre entre los dedos
   const stalled = useRef(false);
   const lastTel = useRef(0);
   const massOf = (id: string | null) => cubes.find((c) => c.id === id)?.mass ?? 0;
 
   useFrame((state, dtRaw) => {
-    const dt = Math.min(dtRaw, 1 / 30);
+    // Tiempo real (con tope): en equipos lentos el brazo no debe ir en cámara lenta.
+    const dt = Math.min(dtRaw, 0.25);
     const c = control.current;
     const payload = massOf(held.current?.id ?? null);
     let moving = false;
@@ -183,32 +186,39 @@ function Controller({ spec, control, bodies, cubes, anchors, gripRef, jointsRef,
 
     // --- pinza ---
     const tool = anchors.current.tool;
+    // Intenta sujetar el cubo más cercano entre los dedos. `radius` es la
+    // tolerancia: amplia al pulsar "cerrar"; estricta mientras la pinza
+    // cerrada y vacía sigue bajando (así un cierre anticipado no aplasta el
+    // cubo contra la mesa: lo toma en cuanto entra entre los dedos).
+    const tryGrasp = (radius: number): "grasp" | "refused" | "none" => {
+      if (!tool) return "none";
+      tool.getWorldPosition(V);
+      let best: string | null = null, bd = radius;
+      for (const cb of cubes) {
+        const b = bodies.current[cb.id]; if (!b) continue;
+        const p = b.translation(); const d = V.distanceTo(new THREE.Vector3(p.x, p.y, p.z));
+        if (d < bd + cb.size / 2) { bd = d; best = cb.id; }
+      }
+      if (!best) return "none";
+      const tq = Math.abs(gravityTorques(spec, jointsRef.current, massOf(best)).shoulder);
+      if (tq > SHOULDER_LIMIT) { c.events.push({ type: "grasp-refused", detail: best, torque: tq }); return "refused"; }
+      const b = bodies.current[best]!;
+      const p = b.translation(), r = b.rotation();
+      const cubeM = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y, p.z), new THREE.Quaternion(r.x, r.y, r.z, r.w), new THREE.Vector3(1, 1, 1));
+      held.current = { id: best, offset: tool.matrixWorld.clone().invert().multiply(cubeM) };
+      b.setBodyType(2 as never, true); // KinematicPositionBased
+      c.events.push({ type: "grasp", detail: best, torque: tq });
+      return "grasp";
+    };
+    if (c.grip && !held.current && pending.current && tool) {
+      if (tryGrasp(0.045) !== "none") pending.current = false;
+    }
     if (c.grip !== prevGrip.current && tool) {
       prevGrip.current = c.grip;
       if (c.grip) {
-        tool.getWorldPosition(V);
-        let best: string | null = null, bd = GRIP_RADIUS;
-        for (const cb of cubes) {
-          const b = bodies.current[cb.id]; if (!b) continue;
-          const p = b.translation(); const d = V.distanceTo(new THREE.Vector3(p.x, p.y, p.z));
-          if (d < bd + cb.size / 2) { bd = d; best = cb.id; }
-        }
-        if (best) {
-          const m = massOf(best);
-          const tq = Math.abs(gravityTorques(spec, jointsRef.current, m).shoulder);
-          if (tq > SHOULDER_LIMIT) {
-            c.events.push({ type: "grasp-refused", detail: best, torque: tq });
-          } else {
-            const b = bodies.current[best]!;
-            const p = b.translation(), r = b.rotation();
-            const cubeM = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y, p.z), new THREE.Quaternion(r.x, r.y, r.z, r.w), new THREE.Vector3(1, 1, 1));
-            const toolInv = tool.matrixWorld.clone().invert();
-            held.current = { id: best, offset: toolInv.multiply(cubeM) };
-            b.setBodyType(2 as never, true); // KinematicPositionBased
-            c.events.push({ type: "grasp", detail: best, torque: tq });
-          }
-        }
+        pending.current = tryGrasp(GRIP_RADIUS) === "none";
       } else if (held.current) {
+        pending.current = false;
         const b = bodies.current[held.current.id];
         if (b) { b.setBodyType(0 as never, true); b.setLinvel({ x: 0, y: 0, z: 0 }, true); b.setAngvel({ x: 0, y: 0, z: 0 }, true); }
         c.events.push({ type: "release", detail: held.current.id });
@@ -247,7 +257,7 @@ function Controller({ spec, control, bodies, cubes, anchors, gripRef, jointsRef,
   return null;
 }
 
-export default function RobotSim({ spec, control, cubes, cubesKey, beacons, zone, lens, target, ghost, onTelemetry, onPickPoint }: Props) {
+export default function RobotSim({ spec, control, cubes, cubesKey, beacons, zone, lens, target, ghost, onTelemetry, onPickPoint, onBeacon }: Props) {
   const anchors = useRef<Record<string, THREE.Object3D | null>>({});
   const bodies = useRef<Record<string, RapierRigidBody | null>>({});
   const jointsRef = useRef<JointState>(control.current.joints);
@@ -276,7 +286,7 @@ export default function RobotSim({ spec, control, cubes, cubesKey, beacons, zone
           <mesh position={[0, -0.05, 0]} receiveShadow
             onClick={(e) => { e.stopPropagation(); onPickPoint([e.point.x, 0, e.point.z]); }}>
             <boxGeometry args={[3.2, 0.1, 3.2]} />
-            <meshPhysicalMaterial color="#0c111c" metalness={0.5} roughness={0.55} clearcoat={0.3} />
+            <meshStandardMaterial color="#0c111c" metalness={0.35} roughness={0.82} />
           </mesh>
         </RigidBody>
 
@@ -322,7 +332,10 @@ export default function RobotSim({ spec, control, cubes, cubesKey, beacons, zone
 
       {/* balizas */}
       {beacons.map((b) => (
-        <group key={b.id} position={b.pos}>
+        <group key={b.id} position={b.pos}
+          onClick={(e) => { e.stopPropagation(); onBeacon?.(b.id); }}
+          onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }}
+          onPointerOut={() => { document.body.style.cursor = ""; }}>
           <mesh><sphereGeometry args={[0.025, 24, 24]} /><meshStandardMaterial color="#000" emissive={lens ? (b.reachable ? "#5df2a5" : "#ff5d6c") : "#ffb547"} emissiveIntensity={3.5} toneMapped={false} /></mesh>
           <mesh><sphereGeometry args={[0.05, 24, 24]} /><meshBasicMaterial color={lens ? (b.reachable ? "#5df2a5" : "#ff5d6c") : "#ffb547"} transparent opacity={0.12} depthWrite={false} /></mesh>
           <mesh position={[0, -b.pos[1] / 2, 0]}><cylinderGeometry args={[0.002, 0.002, b.pos[1], 6]} /><meshBasicMaterial color="#ffb547" transparent opacity={0.25} /></mesh>
