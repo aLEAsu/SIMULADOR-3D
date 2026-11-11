@@ -1,0 +1,52 @@
+{
+  "networking": [
+    {
+      "name": "dos subredes con router",
+      "devices": [
+        {"id": "pc1", "type": "pc", "ip": "192.168.1.10", "prefix": 24},
+        {"id": "pc2", "type": "pc", "ip": "192.168.2.10", "prefix": 24},
+        {"id": "sw1", "type": "switch"},
+        {"id": "sw2", "type": "switch"},
+        {"id": "r1", "type": "router", "ip": "192.168.1.1", "prefix": 24}
+      ],
+      "links": [{"a": "pc1", "b": "sw1"}, {"a": "sw1", "b": "r1"}, {"a": "r1", "b": "sw2"}, {"a": "sw2", "b": "pc2"}]
+    },
+    {
+      "name": "subredes sin router",
+      "devices": [
+        {"id": "a", "type": "pc", "ip": "10.0.0.5", "prefix": 26},
+        {"id": "b", "type": "pc", "ip": "10.0.0.70", "prefix": 26},
+        {"id": "s", "type": "switch"}
+      ],
+      "links": [{"a": "a", "b": "s"}, {"a": "s", "b": "b"}]
+    },
+    {
+      "name": "firewall con regla y VLAN",
+      "devices": [
+        {"id": "pc1", "type": "pc", "ip": "172.16.0.10", "prefix": 16, "vlan_id": 10},
+        {"id": "pc2", "type": "pc", "ip": "172.16.0.11", "prefix": 16, "vlan_id": 20},
+        {"id": "pc3", "type": "pc", "ip": "172.16.5.1", "prefix": 16, "vlan_id": 10},
+        {"id": "fw", "type": "firewall", "default_action": "allow", "rules": [{"other_id": "pc3", "action": "deny"}]},
+        {"id": "ap", "type": "ap", "ip": "172.16.0.2", "prefix": 16}
+      ],
+      "links": [{"a": "pc1", "b": "pc2"}, {"a": "pc1", "b": "fw"}, {"a": "fw", "b": "pc3"}, {"a": "fw", "b": "ap"}]
+    },
+    {
+      "name": "prefijos extremos",
+      "devices": [
+        {"id": "h1", "type": "pc", "ip": "10.1.1.0", "prefix": 31},
+        {"id": "h2", "type": "pc", "ip": "10.1.1.1", "prefix": 31},
+        {"id": "h3", "type": "pc", "ip": "10.9.9.9", "prefix": 32},
+        {"id": "h4", "type": "pc", "ip": "8.8.8.8", "prefix": 8}
+      ],
+      "links": [{"a": "h1", "b": "h2"}, {"a": "h3", "b": "h4"}]
+    }
+  ],
+  "robotics": [
+    {"l1": 1.0, "l2": 0.8, "target_x": 1.2, "target_y": 0.6, "elbow": "up"},
+    {"l1": 1.0, "l2": 0.8, "target_x": 1.2, "target_y": 0.6, "elbow": "down"},
+    {"l1": 0.55, "l2": 0.45, "l3": 0.16, "target_x": 0.7, "target_y": -0.2, "target_phi_deg": -90, "elbow": "up"},
+    {"l1": 2.0, "l2": 1.5, "l3": 0.5, "target_x": -1.0, "target_y": 2.2, "target_phi_deg": 45, "elbow": "down"},
+    {"l1": 1.0, "l2": 1.0, "target_x": 2.0, "target_y": 0.0, "elbow": "up"}
+  ]
+}

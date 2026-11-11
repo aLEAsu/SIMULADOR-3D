@@ -1,0 +1,492 @@
+{
+ "networking": [
+  {
+   "adapter": "networking-topology",
+   "adapter_version": "0.2.0",
+   "fidelity_level": 2,
+   "subnets": {
+    "pc1": {
+     "ip": "192.168.1.10",
+     "prefix": 24,
+     "network": "192.168.1.0",
+     "broadcast": "192.168.1.255",
+     "netmask": "255.255.255.0",
+     "first_host": "192.168.1.1",
+     "last_host": "192.168.1.254",
+     "usable_hosts": 254
+    },
+    "pc2": {
+     "ip": "192.168.2.10",
+     "prefix": 24,
+     "network": "192.168.2.0",
+     "broadcast": "192.168.2.255",
+     "netmask": "255.255.255.0",
+     "first_host": "192.168.2.1",
+     "last_host": "192.168.2.254",
+     "usable_hosts": 254
+    },
+    "r1": {
+     "ip": "192.168.1.1",
+     "prefix": 24,
+     "network": "192.168.1.0",
+     "broadcast": "192.168.1.255",
+     "netmask": "255.255.255.0",
+     "first_host": "192.168.1.1",
+     "last_host": "192.168.1.254",
+     "usable_hosts": 254
+    }
+   },
+   "reachability": [
+    {
+     "a": "pc1",
+     "b": "pc2",
+     "physically_connected": true,
+     "same_subnet": false,
+     "path": [
+      "pc1",
+      "sw1",
+      "r1",
+      "sw2",
+      "pc2"
+     ],
+     "hops": 4,
+     "l3_reachable": true,
+     "reason": "enrutado a trav\u00e9s de router"
+    },
+    {
+     "a": "pc1",
+     "b": "r1",
+     "physically_connected": true,
+     "same_subnet": true,
+     "path": [
+      "pc1",
+      "sw1",
+      "r1"
+     ],
+     "hops": 2,
+     "l3_reachable": true,
+     "reason": "misma subred"
+    },
+    {
+     "a": "pc2",
+     "b": "r1",
+     "physically_connected": true,
+     "same_subnet": false,
+     "path": [
+      "pc2",
+      "sw2",
+      "r1"
+     ],
+     "hops": 2,
+     "l3_reachable": false,
+     "reason": "subredes distintas sin router en la ruta"
+    }
+   ]
+  },
+  {
+   "adapter": "networking-topology",
+   "adapter_version": "0.2.0",
+   "fidelity_level": 2,
+   "subnets": {
+    "a": {
+     "ip": "10.0.0.5",
+     "prefix": 26,
+     "network": "10.0.0.0",
+     "broadcast": "10.0.0.63",
+     "netmask": "255.255.255.192",
+     "first_host": "10.0.0.1",
+     "last_host": "10.0.0.62",
+     "usable_hosts": 62
+    },
+    "b": {
+     "ip": "10.0.0.70",
+     "prefix": 26,
+     "network": "10.0.0.64",
+     "broadcast": "10.0.0.127",
+     "netmask": "255.255.255.192",
+     "first_host": "10.0.0.65",
+     "last_host": "10.0.0.126",
+     "usable_hosts": 62
+    }
+   },
+   "reachability": [
+    {
+     "a": "a",
+     "b": "b",
+     "physically_connected": true,
+     "same_subnet": false,
+     "path": [
+      "a",
+      "s",
+      "b"
+     ],
+     "hops": 2,
+     "l3_reachable": false,
+     "reason": "subredes distintas sin router en la ruta"
+    }
+   ]
+  },
+  {
+   "adapter": "networking-topology",
+   "adapter_version": "0.2.0",
+   "fidelity_level": 2,
+   "subnets": {
+    "pc1": {
+     "ip": "172.16.0.10",
+     "prefix": 16,
+     "network": "172.16.0.0",
+     "broadcast": "172.16.255.255",
+     "netmask": "255.255.0.0",
+     "first_host": "172.16.0.1",
+     "last_host": "172.16.255.254",
+     "usable_hosts": 65534
+    },
+    "pc2": {
+     "ip": "172.16.0.11",
+     "prefix": 16,
+     "network": "172.16.0.0",
+     "broadcast": "172.16.255.255",
+     "netmask": "255.255.0.0",
+     "first_host": "172.16.0.1",
+     "last_host": "172.16.255.254",
+     "usable_hosts": 65534
+    },
+    "pc3": {
+     "ip": "172.16.5.1",
+     "prefix": 16,
+     "network": "172.16.0.0",
+     "broadcast": "172.16.255.255",
+     "netmask": "255.255.0.0",
+     "first_host": "172.16.0.1",
+     "last_host": "172.16.255.254",
+     "usable_hosts": 65534
+    },
+    "ap": {
+     "ip": "172.16.0.2",
+     "prefix": 16,
+     "network": "172.16.0.0",
+     "broadcast": "172.16.255.255",
+     "netmask": "255.255.0.0",
+     "first_host": "172.16.0.1",
+     "last_host": "172.16.255.254",
+     "usable_hosts": 65534
+    }
+   },
+   "reachability": [
+    {
+     "a": "pc1",
+     "b": "pc2",
+     "physically_connected": false,
+     "same_subnet": true,
+     "path": null,
+     "hops": null,
+     "l3_reachable": false,
+     "reason": "sin enlace f\u00edsico (o bloqueado por VLANs distintas sin router/firewall en el camino)"
+    },
+    {
+     "a": "pc1",
+     "b": "pc3",
+     "physically_connected": true,
+     "same_subnet": true,
+     "path": [
+      "pc1",
+      "fw",
+      "pc3"
+     ],
+     "hops": 2,
+     "l3_reachable": false,
+     "reason": "bloqueado por firewall 'fw'"
+    },
+    {
+     "a": "pc1",
+     "b": "ap",
+     "physically_connected": true,
+     "same_subnet": true,
+     "path": [
+      "pc1",
+      "fw",
+      "ap"
+     ],
+     "hops": 2,
+     "l3_reachable": true,
+     "reason": "misma subred"
+    },
+    {
+     "a": "pc2",
+     "b": "pc3",
+     "physically_connected": false,
+     "same_subnet": true,
+     "path": null,
+     "hops": null,
+     "l3_reachable": false,
+     "reason": "sin enlace f\u00edsico (o bloqueado por VLANs distintas sin router/firewall en el camino)"
+    },
+    {
+     "a": "pc2",
+     "b": "ap",
+     "physically_connected": false,
+     "same_subnet": true,
+     "path": null,
+     "hops": null,
+     "l3_reachable": false,
+     "reason": "sin enlace f\u00edsico (o bloqueado por VLANs distintas sin router/firewall en el camino)"
+    },
+    {
+     "a": "pc3",
+     "b": "ap",
+     "physically_connected": true,
+     "same_subnet": true,
+     "path": [
+      "pc3",
+      "fw",
+      "ap"
+     ],
+     "hops": 2,
+     "l3_reachable": false,
+     "reason": "bloqueado por firewall 'fw'"
+    }
+   ]
+  },
+  {
+   "adapter": "networking-topology",
+   "adapter_version": "0.2.0",
+   "fidelity_level": 2,
+   "subnets": {
+    "h1": {
+     "ip": "10.1.1.0",
+     "prefix": 31,
+     "network": "10.1.1.0",
+     "broadcast": "10.1.1.1",
+     "netmask": "255.255.255.254",
+     "first_host": "10.1.1.0",
+     "last_host": "10.1.1.1",
+     "usable_hosts": 2
+    },
+    "h2": {
+     "ip": "10.1.1.1",
+     "prefix": 31,
+     "network": "10.1.1.0",
+     "broadcast": "10.1.1.1",
+     "netmask": "255.255.255.254",
+     "first_host": "10.1.1.0",
+     "last_host": "10.1.1.1",
+     "usable_hosts": 2
+    },
+    "h3": {
+     "ip": "10.9.9.9",
+     "prefix": 32,
+     "network": "10.9.9.9",
+     "broadcast": "10.9.9.9",
+     "netmask": "255.255.255.255",
+     "first_host": "10.9.9.9",
+     "last_host": "10.9.9.9",
+     "usable_hosts": 1
+    },
+    "h4": {
+     "ip": "8.8.8.8",
+     "prefix": 8,
+     "network": "8.0.0.0",
+     "broadcast": "8.255.255.255",
+     "netmask": "255.0.0.0",
+     "first_host": "8.0.0.1",
+     "last_host": "8.255.255.254",
+     "usable_hosts": 16777214
+    }
+   },
+   "reachability": [
+    {
+     "a": "h1",
+     "b": "h2",
+     "physically_connected": true,
+     "same_subnet": true,
+     "path": [
+      "h1",
+      "h2"
+     ],
+     "hops": 1,
+     "l3_reachable": true,
+     "reason": "misma subred"
+    },
+    {
+     "a": "h1",
+     "b": "h3",
+     "physically_connected": false,
+     "same_subnet": false,
+     "path": null,
+     "hops": null,
+     "l3_reachable": false,
+     "reason": "sin enlace f\u00edsico (o bloqueado por VLANs distintas sin router/firewall en el camino)"
+    },
+    {
+     "a": "h1",
+     "b": "h4",
+     "physically_connected": false,
+     "same_subnet": false,
+     "path": null,
+     "hops": null,
+     "l3_reachable": false,
+     "reason": "sin enlace f\u00edsico (o bloqueado por VLANs distintas sin router/firewall en el camino)"
+    },
+    {
+     "a": "h2",
+     "b": "h3",
+     "physically_connected": false,
+     "same_subnet": false,
+     "path": null,
+     "hops": null,
+     "l3_reachable": false,
+     "reason": "sin enlace f\u00edsico (o bloqueado por VLANs distintas sin router/firewall en el camino)"
+    },
+    {
+     "a": "h2",
+     "b": "h4",
+     "physically_connected": false,
+     "same_subnet": false,
+     "path": null,
+     "hops": null,
+     "l3_reachable": false,
+     "reason": "sin enlace f\u00edsico (o bloqueado por VLANs distintas sin router/firewall en el camino)"
+    },
+    {
+     "a": "h3",
+     "b": "h4",
+     "physically_connected": true,
+     "same_subnet": false,
+     "path": [
+      "h3",
+      "h4"
+     ],
+     "hops": 1,
+     "l3_reachable": false,
+     "reason": "subredes distintas sin router en la ruta"
+    }
+   ]
+  }
+ ],
+ "robotics": [
+  {
+   "link_count": 2,
+   "theta1_deg": -9.826193107021835,
+   "theta2_deg": 84.26082952273322,
+   "joint1": {
+    "x": 0.985329983228432,
+    "y": -0.17065996645686404
+   },
+   "end_effector": {
+    "x": 1.2000000000000002,
+    "y": 0.6000000000000001
+   },
+   "target": {
+    "x": 1.2,
+    "y": 0.6
+   },
+   "fk_verification_error": 2.482534153247273e-16,
+   "workspace": {
+    "r_min": 0.19999999999999996,
+    "r_max": 1.8
+   }
+  },
+  {
+   "link_count": 2,
+   "theta1_deg": 62.95629546117782,
+   "theta2_deg": -84.26082952273322,
+   "joint1": {
+    "x": 0.45467001677156793,
+    "y": 0.890659966456864
+   },
+   "end_effector": {
+    "x": 1.2,
+    "y": 0.6000000000000001
+   },
+   "target": {
+    "x": 1.2,
+    "y": 0.6
+   },
+   "fk_verification_error": 1.1102230246251565e-16,
+   "workspace": {
+    "r_min": 0.19999999999999996,
+    "r_max": 1.8
+   }
+  },
+  {
+   "link_count": 3,
+   "theta1_deg": -43.17984676635051,
+   "theta2_deg": 91.55122676542888,
+   "theta3_deg": -138.37137999907839,
+   "joint1": {
+    "x": 0.40106515081278576,
+    "y": -0.37635986077624883
+   },
+   "joint2": {
+    "x": 0.7,
+    "y": -0.039999999999999925
+   },
+   "end_effector": {
+    "x": 0.7,
+    "y": -0.19999999999999993
+   },
+   "target": {
+    "x": 0.7,
+    "y": -0.2
+   },
+   "target_phi_deg": -90,
+   "fk_verification_error": 8.326672684688674e-17,
+   "fk_orientation_error_deg": 0.0,
+   "workspace": {
+    "r_min": 0.10000000000000003,
+    "r_max": 1.0
+   }
+  },
+  {
+   "link_count": 3,
+   "theta1_deg": 166.4740856364773,
+   "theta2_deg": -99.67667123642765,
+   "theta3_deg": -21.797414400049654,
+   "joint1": {
+    "x": -1.9445284714289093,
+    "y": 0.4677702681897917
+   },
+   "joint2": {
+    "x": -1.3535533905932737,
+    "y": 1.8464466094067264
+   },
+   "end_effector": {
+    "x": -1.0,
+    "y": 2.2
+   },
+   "target": {
+    "x": -1.0,
+    "y": 2.2
+   },
+   "target_phi_deg": 45,
+   "fk_verification_error": 0.0,
+   "fk_orientation_error_deg": 0.0,
+   "workspace": {
+    "r_min": 0.5,
+    "r_max": 3.5
+   }
+  },
+  {
+   "link_count": 2,
+   "theta1_deg": 0.0,
+   "theta2_deg": 0.0,
+   "joint1": {
+    "x": 1.0,
+    "y": 0.0
+   },
+   "end_effector": {
+    "x": 2.0,
+    "y": 0.0
+   },
+   "target": {
+    "x": 2.0,
+    "y": 0.0
+   },
+   "fk_verification_error": 0.0,
+   "workspace": {
+    "r_min": 0.0,
+    "r_max": 2.0
+   }
+  }
+ ]
+}

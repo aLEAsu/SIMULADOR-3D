@@ -1,3 +1,4 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
-export default nextConfig;
+export default (phase) => ({
+	distDir: phase === "phase-development-server" ? ".next-dev" : ".next",
+});
